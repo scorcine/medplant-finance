@@ -2,18 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, EyeOff } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { ImportAgenda } from "@/components/import-agenda";
 import type { Shift, ShiftLocation } from "@/lib/types";
 import { loadLocations, saveLocations, todayKey } from "@/lib/records";
 import {
   addShift,
+  hideTitle,
   loadCalendars,
+  loadHiddenTitles,
   loadImportedShifts,
   mergeShifts,
   rematchImportedShifts,
   saveImportedShifts,
+  unhideTitle,
   type AgendaCalendar,
 } from "@/lib/shifts-store";
 import { cn, formatBRL } from "@/lib/utils";
@@ -44,6 +47,8 @@ export default function AgendaPage() {
   const [selectedDay, setSelectedDay] = useState(today);
   const [draft, setDraft] = useState({ date: today, start: "19:00", end: "07:00", locationId: "" });
   const [notice, setNotice] = useState("");
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [hiddenNotice, setHiddenNotice] = useState("");
 
   useEffect(() => {
     const loadedPlaces = loadLocations();
@@ -51,7 +56,22 @@ export default function AgendaPage() {
     setDraft((current) => ({ ...current, locationId: current.locationId || loadedPlaces[0]?.id || "" }));
     setCalendars(loadCalendars());
     setAgenda(mergeShifts(loadImportedShifts()));
+    setHidden(loadHiddenTitles());
   }, []);
+
+  function hideEvent(title: string) {
+    hideTitle(title);
+    const kept = loadImportedShifts();
+    saveImportedShifts(kept);
+    setAgenda(mergeShifts(kept));
+    setHidden(loadHiddenTitles());
+  }
+
+  function showAgain(title: string) {
+    unhideTitle(title);
+    setHidden(loadHiddenTitles());
+    setHiddenNotice(`“${title}” volta a aparecer quando você clicar em Atualizar nas agendas conectadas.`);
+  }
 
   function placeOf(id: string) {
     return places.find((place) => place.id === id);
@@ -238,7 +258,20 @@ export default function AgendaPage() {
                             {shift.start}–{shift.end}
                           </p>
                         </div>
-                        {location ? <p className="text-sm font-semibold">{formatBRL(location.defaultRate)}</p> : null}
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {location ? <p className="text-sm font-semibold">{formatBRL(location.defaultRate)}</p> : null}
+                          {shift.id.startsWith("gcal-") && shift.title ? (
+                            <button
+                              type="button"
+                              onClick={() => hideEvent(shift.title ?? "")}
+                              className="inline-flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-danger)]"
+                              title={`Ocultar “${shift.title}” em todos os dias`}
+                            >
+                              <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                              Ocultar
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                       {shift.id.startsWith("gcal-") && !location ? (
                         <div className="mt-2 space-y-2 text-xs text-[var(--color-muted)]">
@@ -275,6 +308,30 @@ export default function AgendaPage() {
               )}
             </ul>
           </div>
+
+          {hidden.length > 0 ? (
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h2 className="font-semibold">Compromissos ocultos</h2>
+              <p className="mt-1 text-xs text-[var(--color-muted)]">Não aparecem na agenda nem contam no balanço.</p>
+              <ul className="mt-3 space-y-2">
+                {hidden.map((title) => (
+                  <li key={title} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate">{title}</span>
+                    <button
+                      type="button"
+                      onClick={() => showAgain(title)}
+                      className="shrink-0 text-xs text-[var(--color-accent)] hover:underline"
+                    >
+                      Mostrar de novo
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {hiddenNotice ? <p className="mt-3 text-xs text-[var(--color-muted)]">{hiddenNotice}</p> : null}
+            </div>
+          ) : hiddenNotice ? (
+            <p className="text-xs text-[var(--color-muted)]">{hiddenNotice}</p>
+          ) : null}
 
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <h2 className="font-semibold">Plantões no mês por pessoa</h2>
@@ -359,9 +416,9 @@ export default function AgendaPage() {
       )}
 
       <ImportAgenda
-        onImported={(imported) => {
+        onImported={() => {
           setCalendars(loadCalendars());
-          setAgenda(mergeShifts(imported));
+          setAgenda(mergeShifts(loadImportedShifts()));
         }}
       />
     </div>

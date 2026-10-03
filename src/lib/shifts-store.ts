@@ -128,8 +128,45 @@ export function loadCalendars(): AgendaCalendar[] {
   }));
 }
 
+const HIDDEN_KEY = "medplant-agenda-ocultos";
+const DEFAULT_HIDDEN = ["POSTE ITALIANE"];
+
+export function loadHiddenTitles(): string[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(HIDDEN_KEY);
+  if (raw === null) return DEFAULT_HIDDEN;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenTitles(list: string[]) {
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify(list));
+}
+
+export function isHiddenShift(shift: Pick<Shift, "title" | "where">, hidden = loadHiddenTitles()) {
+  if (!shift.title && !shift.where) return false;
+  const haystack = normalize(`${shift.title ?? ""} ${shift.where ?? ""}`).replace(/\s+/g, " ");
+  return hidden.some((term) => containsTerm(haystack, term));
+}
+
+export function hideTitle(title: string) {
+  const term = title.trim();
+  if (!term) return;
+  const current = loadHiddenTitles();
+  if (!current.some((item) => normalize(item) === normalize(term))) saveHiddenTitles([...current, term]);
+}
+
+export function unhideTitle(title: string) {
+  saveHiddenTitles(loadHiddenTitles().filter((item) => normalize(item) !== normalize(title)));
+}
+
 export function loadImportedShifts(): Shift[] {
-  return readList<Shift>(IMPORTED_KEY);
+  const hidden = loadHiddenTitles();
+  return readList<Shift>(IMPORTED_KEY).filter((shift) => !isHiddenShift(shift, hidden));
 }
 
 export function saveImportedShifts(list: Shift[]) {
