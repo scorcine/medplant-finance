@@ -32,6 +32,26 @@ export type Expense = {
   scope: "pessoal" | "familia";
   payment: "debito" | "credito" | "pix" | "dinheiro";
   paidBy?: string;
+  tipo?: ExpenseKind;
+  cardId?: string;
+  parcelas?: number;
+  fimMes?: string;
+};
+
+export type ExpenseKind = "fixo" | "cartao" | "variavel";
+
+export const KIND_LABEL: Record<ExpenseKind, string> = {
+  fixo: "Fixo",
+  cartao: "Cartão de crédito",
+  variavel: "Variável",
+};
+
+export type ExpenseEntry = {
+  expense: Expense;
+  kind: ExpenseKind;
+  amount: number;
+  date: string;
+  parcela?: string;
 };
 
 export type CreditCard = {
@@ -57,13 +77,52 @@ export type Position = {
   atualizadoEm?: string;
 };
 
+export function expenseKind(expense: Expense): ExpenseKind {
+  return expense.tipo ?? (expense.payment === "credito" ? "cartao" : "variavel");
+}
+
+function monthsBetween(from: string, to: string) {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+
+function dateInMonth(month: string, day: string) {
+  const [year, m] = month.split("-").map(Number);
+  const last = new Date(year, m, 0).getDate();
+  return `${month}-${String(Math.min(Number(day), last)).padStart(2, "0")}`;
+}
+
+export function expensesInMonth(list: Expense[], month: string): ExpenseEntry[] {
+  const entries: ExpenseEntry[] = [];
+  for (const expense of list) {
+    const kind = expenseKind(expense);
+    const start = expense.date.slice(0, 7);
+    const offset = monthsBetween(start, month);
+    if (offset < 0) continue;
+    const date = dateInMonth(month, expense.date.slice(8, 10));
+    if (kind === "fixo") {
+      if (expense.fimMes && month > expense.fimMes) continue;
+      entries.push({ expense, kind, amount: expense.amount, date });
+    } else if (kind === "cartao" && (expense.parcelas ?? 1) > 1) {
+      const total = expense.parcelas ?? 1;
+      if (offset >= total) continue;
+      entries.push({ expense, kind, amount: expense.amount / total, date, parcela: `${offset + 1}/${total}` });
+    } else if (offset === 0) {
+      entries.push({ expense, kind, amount: expense.amount, date: expense.date });
+    }
+  }
+  return entries.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function inScope(expense: Expense, scope: ViewScope) {
+  if (scope === "pessoal") return expense.scope === "pessoal";
+  if (scope === "familia") return expense.scope === "familia";
+  return true;
+}
+
 export function monthExpenses(monthPrefix: string, scope: ViewScope, list: Expense[]): number {
-  return list
-    .filter((e) => e.date.startsWith(monthPrefix))
-    .filter((e) => {
-      if (scope === "pessoal") return e.scope === "pessoal";
-      if (scope === "familia") return e.scope === "familia";
-      return true;
-    })
-    .reduce((sum, e) => sum + e.amount, 0);
+  return expensesInMonth(list, monthPrefix)
+    .filter((entry) => inScope(entry.expense, scope))
+    .reduce((sum, entry) => sum + entry.amount, 0);
 }

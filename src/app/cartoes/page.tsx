@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { CreditCard as CardIcon, Trash2 } from "lucide-react";
 import { Field, TextInput } from "@/components/form-field";
-import { loadCards, parseMoney, saveCards } from "@/lib/records";
-import type { CreditCard } from "@/lib/types";
+import { currentMonthKey, loadCards, loadExpenses, parseMoney, saveCards } from "@/lib/records";
+import { expensesInMonth, type CreditCard, type ExpenseEntry } from "@/lib/types";
 import { formatBRL } from "@/lib/utils";
 
 const blank = { name: "", last4: "", limit: "", invoice: "", closingDay: "", dueDay: "" };
@@ -13,10 +13,16 @@ export default function CartoesPage() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [form, setForm] = useState(blank);
   const [error, setError] = useState("");
+  const [monthEntries, setMonthEntries] = useState<ExpenseEntry[]>([]);
 
   useEffect(() => {
     setCards(loadCards());
+    setMonthEntries(expensesInMonth(loadExpenses(), currentMonthKey()));
   }, []);
+
+  function launchedOn(cardId: string) {
+    return monthEntries.filter((entry) => entry.expense.cardId === cardId).reduce((sum, entry) => sum + entry.amount, 0);
+  }
 
   function persist(next: CreditCard[]) {
     setCards(next);
@@ -94,7 +100,9 @@ export default function CartoesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {cards.map((card) => {
-            const usage = (card.invoice / card.limit) * 100;
+            const launched = launchedOn(card.id);
+            const invoice = launched > 0 ? launched : card.invoice;
+            const usage = (invoice / card.limit) * 100;
             return (
               <article
                 key={card.id}
@@ -114,8 +122,10 @@ export default function CartoesPage() {
                 </div>
                 <div className="mt-6">
                   <div className="flex justify-between text-sm">
-                    <span className="text-[var(--color-muted)]">Fatura atual</span>
-                    <span className="font-semibold">{formatBRL(card.invoice)}</span>
+                    <span className="text-[var(--color-muted)]">
+                      {launched > 0 ? "Lançado em Gastos neste mês" : "Fatura atual"}
+                    </span>
+                    <span className="font-semibold">{formatBRL(invoice)}</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--color-background)]">
                     <div className="h-full rounded-full bg-[var(--color-accent)]" style={{ width: `${Math.min(usage, 100)}%` }} />

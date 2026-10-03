@@ -8,7 +8,16 @@ import { StatCard } from "@/components/stat-card";
 import { loadFamily, loadOwner, type Person } from "@/lib/people";
 import { currentMonthKey, DATA_EVENT, loadExpenses, loadLocations } from "@/lib/records";
 import { loadCalendars, loadImportedShifts, mergeShifts, type AgendaCalendar } from "@/lib/shifts-store";
-import { monthExpenses, type Expense, type Shift, type ShiftLocation, type ViewScope } from "@/lib/types";
+import {
+  KIND_LABEL,
+  expensesInMonth,
+  inScope,
+  monthExpenses,
+  type Expense,
+  type Shift,
+  type ShiftLocation,
+  type ViewScope,
+} from "@/lib/types";
 import { formatBRL } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -59,12 +68,8 @@ export default function DashboardPage() {
     [agenda, placeList, month],
   );
 
-  const recentExpenses = expenseList
-    .filter((expense) => {
-      if (scope === "pessoal") return expense.scope === "pessoal";
-      if (scope === "familia") return expense.scope === "familia";
-      return true;
-    })
+  const recentExpenses = expensesInMonth(expenseList, month)
+    .filter((entry) => inScope(entry.expense, scope))
     .slice(0, 6);
 
   const steps = [
@@ -188,15 +193,19 @@ export default function DashboardPage() {
             </p>
           ) : (
             <ul className="mt-5 divide-y divide-[var(--color-border)]">
-              {recentExpenses.map((e) => (
-                <li key={e.id} className="flex items-center justify-between gap-3 py-3 first:pt-0">
+              {recentExpenses.map((entry) => (
+                <li key={entry.expense.id} className="flex items-center justify-between gap-3 py-3 first:pt-0">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{e.description}</p>
+                    <p className="truncate font-medium">
+                      {entry.expense.description}
+                      {entry.parcela ? ` (${entry.parcela})` : ""}
+                    </p>
                     <p className="text-xs text-[var(--color-muted)]">
-                      {e.category} · {e.scope === "familia" ? "Família" : "Pessoal"} · {e.payment}
+                      {KIND_LABEL[entry.kind]} · {entry.expense.category} ·{" "}
+                      {entry.expense.scope === "familia" ? "Família" : "Pessoal"}
                     </p>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold text-[var(--color-danger)]">−{formatBRL(e.amount)}</span>
+                  <span className="shrink-0 text-sm font-semibold text-[var(--color-danger)]">−{formatBRL(entry.amount)}</span>
                 </li>
               ))}
             </ul>
