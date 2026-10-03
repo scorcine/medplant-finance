@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { ImportAgenda } from "@/components/import-agenda";
-import { locations as sampleLocations, type Shift, type ShiftLocation } from "@/lib/mock-data";
-import { loadLocations } from "@/lib/records";
+import type { Shift, ShiftLocation } from "@/lib/types";
+import { loadLocations, todayKey } from "@/lib/records";
 import { addShift, loadCalendars, loadImportedShifts, mergeShifts, saveImportedShifts, type AgendaCalendar } from "@/lib/shifts-store";
 import { cn, formatBRL } from "@/lib/utils";
 
@@ -22,13 +23,6 @@ function buildMonthGrid(year: number, month: number) {
   return cells;
 }
 
-function todayKey() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
 export default function PlantoesPage() {
   const today = todayKey();
   const [cursor, setCursor] = useState(() => {
@@ -36,7 +30,7 @@ export default function PlantoesPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [agenda, setAgenda] = useState<Shift[]>([]);
-  const [places, setPlaces] = useState<ShiftLocation[]>(sampleLocations);
+  const [places, setPlaces] = useState<ShiftLocation[]>([]);
   const [calendars, setCalendars] = useState<AgendaCalendar[]>([]);
   const [focus, setFocus] = useState("juntos");
   const [draft, setDraft] = useState({ date: today, start: "19:00", end: "07:00", locationId: "" });
@@ -127,6 +121,14 @@ export default function PlantoesPage() {
         }}
       />
 
+      {places.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-[var(--color-border)] p-5 text-sm text-[var(--color-muted)]">
+          Para cadastrar um plantão, primeiro cadastre o local e o valor.{" "}
+          <Link href="/locais" className="text-[var(--color-accent)] hover:underline">
+            Cadastrar local
+          </Link>
+        </p>
+      ) : (
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -173,6 +175,7 @@ export default function PlantoesPage() {
           {notice ? <p className="text-sm text-[var(--color-success)]">{notice}</p> : null}
         </div>
       </form>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:p-5">

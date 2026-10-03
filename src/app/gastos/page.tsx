@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { ScopeToggle } from "@/components/scope-toggle";
-import type { Expense, ViewScope } from "@/lib/mock-data";
-import { loadExpenses, parseMoney, saveExpenses } from "@/lib/records";
+import type { Expense, ViewScope } from "@/lib/types";
+import { loadExpenses, parseMoney, saveExpenses, todayKey } from "@/lib/records";
 import { formatBRL } from "@/lib/utils";
 
 const blank = {
-  date: "2026-10-03",
+  date: "",
   description: "",
   amount: "",
-  category: "Casa",
+  category: "",
   scope: "pessoal" as Expense["scope"],
   payment: "debito" as Expense["payment"],
 };
@@ -25,6 +25,7 @@ export default function GastosPage() {
 
   useEffect(() => {
     setList(loadExpenses());
+    setForm((current) => ({ ...current, date: todayKey() }));
   }, []);
 
   const filtered = list.filter((expense) => {
@@ -47,7 +48,7 @@ export default function GastosPage() {
         date: form.date,
         description: form.description.trim(),
         amount,
-        category: form.category,
+        category: form.category.trim() || "Sem categoria",
         scope: form.scope,
         payment: form.payment,
       },
@@ -88,7 +89,6 @@ export default function GastosPage() {
           <TextInput
             value={form.description}
             onChange={(event) => setForm({ ...form, description: event.target.value })}
-            placeholder="Supermercado"
             required
           />
         </Field>
@@ -97,7 +97,6 @@ export default function GastosPage() {
             inputMode="decimal"
             value={form.amount}
             onChange={(event) => setForm({ ...form, amount: event.target.value })}
-            placeholder="89,50"
             required
           />
         </Field>
@@ -152,6 +151,13 @@ export default function GastosPage() {
               </tr>
             </thead>
             <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-6 text-[var(--color-muted)]">
+                    Nenhum gasto lançado ainda.
+                  </td>
+                </tr>
+              ) : null}
               {filtered.map((expense) => (
                 <tr key={expense.id} className="border-b border-[var(--color-border)] last:border-0">
                   <td className="px-5 py-3 text-[var(--color-muted)]">

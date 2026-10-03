@@ -12,7 +12,7 @@ import {
   shiftsFromIcs,
   type AgendaCalendar,
 } from "@/lib/shifts-store";
-import type { Shift } from "@/lib/mock-data";
+import type { Shift } from "@/lib/types";
 
 type Props = {
   onImported: (shifts: Shift[]) => void;

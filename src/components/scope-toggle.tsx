@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { ViewScope } from "@/lib/mock-data";
+import type { ViewScope } from "@/lib/types";
 
 const labels: { id: ViewScope; label: string }[] = [
   { id: "pessoal", label: "Pessoal" },

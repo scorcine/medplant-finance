@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { MapPin, Pencil, Trash2 } from "lucide-react";
 import { Field, TextInput } from "@/components/form-field";
-import type { ShiftLocation } from "@/lib/mock-data";
+import type { ShiftLocation } from "@/lib/types";
 import { loadLocations, parseMoney, saveLocations } from "@/lib/records";
 import { formatBRL } from "@/lib/utils";
 
@@ -79,7 +79,6 @@ export default function LocaisPage() {
           <TextInput
             value={form.name}
             onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-            placeholder="Hospital Santa Clara"
             required
           />
         </Field>
@@ -88,7 +87,6 @@ export default function LocaisPage() {
             inputMode="decimal"
             value={form.rate}
             onChange={(event) => setForm((current) => ({ ...current, rate: event.target.value }))}
-            placeholder="1300,00"
             required
           />
         </Field>
@@ -117,6 +115,11 @@ export default function LocaisPage() {
       </form>
 
       <ul className="space-y-3">
+        {list.length === 0 ? (
+          <li className="rounded-2xl border border-dashed border-[var(--color-border)] p-5 text-sm text-[var(--color-muted)]">
+            Nenhum local cadastrado ainda.
+          </li>
+        ) : null}
         {list.map((location) => (
           <li
             key={location.id}

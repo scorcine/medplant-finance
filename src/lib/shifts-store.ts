@@ -1,5 +1,6 @@
-import { locations, shifts as sampleShifts, type Shift, type ShiftLocation } from "@/lib/mock-data";
+import type { Shift, ShiftLocation } from "@/lib/types";
 import { parseIcs, type AgendaEvent } from "@/lib/ics";
+import { readList, writeList } from "@/lib/records";
 import { loadFamily, loadPeople, type Person } from "@/lib/people";
 
 const IMPORTED_KEY = "medplant-agenda-shifts";
@@ -33,7 +34,7 @@ function normalize(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-export function matchLocation(text: string, list: ShiftLocation[] = locations) {
+export function matchLocation(text: string, list: ShiftLocation[]) {
   const haystack = normalize(text);
   return list.find((location) => {
     const name = normalize(location.name);
@@ -45,7 +46,7 @@ export function matchLocation(text: string, list: ShiftLocation[] = locations) {
 
 export function eventsToShifts(
   events: AgendaEvent[],
-  list: ShiftLocation[] = locations,
+  list: ShiftLocation[],
   owner?: Pick<AgendaCalendar, "id" | "name" | "color">,
 ): Shift[] {
   return events.map((event) => {
@@ -99,19 +100,11 @@ export function loadCalendars(): AgendaCalendar[] {
 }
 
 export function loadImportedShifts(): Shift[] {
-  if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem(IMPORTED_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as Shift[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return readList<Shift>(IMPORTED_KEY);
 }
 
 export function saveImportedShifts(list: Shift[]) {
-  localStorage.setItem(IMPORTED_KEY, JSON.stringify(list));
+  writeList(IMPORTED_KEY, list);
 }
 
 export function loadAgendaUrl() {
@@ -144,16 +137,13 @@ export function addShift(shift: Shift) {
   return next;
 }
 
-export function mergeShifts(imported: Shift[]) {
-  const importedIds = new Set(imported.map((shift) => shift.id));
-  return [...sampleShifts.filter((shift) => !importedIds.has(shift.id)), ...imported].sort((a, b) =>
-    `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`),
-  );
+export function mergeShifts(list: Shift[]) {
+  return [...list].sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`));
 }
 
 export function shiftsFromIcs(
   ics: string,
-  list?: ShiftLocation[],
+  list: ShiftLocation[],
   owner?: Pick<AgendaCalendar, "id" | "name" | "color">,
 ) {
   return eventsToShifts(parseIcs(ics), list, owner);

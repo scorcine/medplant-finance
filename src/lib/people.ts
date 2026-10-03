@@ -1,3 +1,5 @@
+import { DATA_EVENT } from "@/lib/records";
+
 export type PersonRole = "titular" | "familiar";
 
 export type Person = {
@@ -21,6 +23,7 @@ export type FamilyGroup = {
 
 export const PEOPLE_KEY = "medplant-pessoas";
 export const FAMILY_KEY = "medplant-familia";
+const OWNER_KEY = "medplant-conta";
 
 export function loadPeople(): Person[] {
   if (typeof window === "undefined") return [];
@@ -45,6 +48,19 @@ export function loadPeople(): Person[] {
 
 export function savePeople(people: Person[]) {
   localStorage.setItem(PEOPLE_KEY, JSON.stringify(people));
+  window.dispatchEvent(new Event(DATA_EVENT));
+}
+
+export function loadOwner(): Person | null {
+  const people = loadPeople();
+  if (people.length === 0) return null;
+  const ownerId = localStorage.getItem(OWNER_KEY);
+  return people.find((person) => person.id === ownerId) ?? people[0];
+}
+
+export function saveOwner(personId: string) {
+  localStorage.setItem(OWNER_KEY, personId);
+  window.dispatchEvent(new Event(DATA_EVENT));
 }
 
 export function loadFamily(): FamilyGroup {
@@ -66,4 +82,5 @@ export function loadFamily(): FamilyGroup {
 
 export function saveFamily(group: FamilyGroup) {
   localStorage.setItem(FAMILY_KEY, JSON.stringify(group));
+  window.dispatchEvent(new Event(DATA_EVENT));
 }

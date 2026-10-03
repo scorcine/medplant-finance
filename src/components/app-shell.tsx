@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,12 +14,14 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import { loadOwner, type Person } from "@/lib/people";
+import { DATA_EVENT } from "@/lib/records";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/carteira", label: "Carteira", icon: PieChart },
-  { href: "/cadastro/pessoas", label: "Cadastro de pessoas", icon: UserRound },
+  { href: "/cadastro/pessoas", label: "Meus dados e pessoas", icon: UserRound },
   { href: "/cadastro/familia", label: "Inclusão da família", icon: Users },
   { href: "/plantoes", label: "Plantões", icon: CalendarDays },
   { href: "/locais", label: "Locais", icon: MapPin },
@@ -28,6 +31,18 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [owner, setOwner] = useState<Person | null>(null);
+
+  useEffect(() => {
+    const refresh = () => setOwner(loadOwner());
+    refresh();
+    window.addEventListener(DATA_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(DATA_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [pathname]);
 
   return (
     <div className="flex min-h-dvh">
@@ -62,13 +77,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="border-t border-[var(--color-border)] p-4">
-          <div className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-elevated)] px-3 py-3">
+          <Link
+            href="/cadastro/pessoas"
+            className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-elevated)] px-3 py-3 hover:opacity-90"
+          >
             <Wallet className="h-4 w-4 text-[var(--color-muted)]" aria-hidden />
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">Ana Silva</p>
-              <p className="text-xs text-[var(--color-muted)]">Conta pessoal</p>
+              <p className="truncate text-sm font-medium">{owner ? owner.nome : "Fazer meu cadastro"}</p>
+              <p className="truncate text-xs text-[var(--color-muted)]">{owner ? owner.email : "Nenhum dado ainda"}</p>
             </div>
-          </div>
+          </Link>
         </div>
       </aside>
 
@@ -78,6 +96,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PieChart className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
             <span className="font-semibold">MedPlant</span>
           </div>
+          <Link href="/cadastro/pessoas" className="max-w-[50%] truncate text-xs text-[var(--color-muted)]">
+            {owner ? owner.nome : "Fazer meu cadastro"}
+          </Link>
         </header>
         <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-border)] px-2 py-2 lg:hidden">
           {nav.map(({ href, label, icon: Icon }) => {

@@ -121,7 +121,6 @@ export default function InclusaoFamiliaPage() {
                   setSaved(false);
                   setGroup((current) => ({ ...current, nomeFamilia: e.target.value }));
                 }}
-                placeholder="Família Silva"
                 required
               />
             </Field>
