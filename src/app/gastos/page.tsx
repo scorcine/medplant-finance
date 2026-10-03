@@ -14,6 +14,8 @@ import {
   type ExpenseEntry,
   type ExpenseKind,
   type ViewScope,
+  SPLIT_PAYER,
+  payerShares,
 } from "@/lib/types";
 import {
   currentMonthKey,
@@ -62,6 +64,7 @@ const blank = {
   paidBy: "",
   cardId: "",
   parcelas: "1",
+  split: {} as Record<string, string>,
 };
 
 const DIVISAO_LABEL: Record<FamilyGroup["divisao"], string> = {
@@ -123,10 +126,26 @@ export default function GastosPage() {
   }, [people, family]);
 
   useEffect(() => {
+    if (form.paidBy === SPLIT_PAYER) return;
     if (payers.length > 0 && !payers.some((person) => person.id === form.paidBy)) {
       setForm((current) => ({ ...current, paidBy: payers[0].id }));
     }
   }, [payers, form.paidBy]);
+
+  function equalSplit() {
+    const each = payers.length > 0 ? 100 / payers.length : 0;
+    return Object.fromEntries(payers.map((person) => [person.id, String(Math.round(each * 100) / 100).replace(".", ",")]));
+  }
+
+  const memberIds = payers.map((person) => person.id);
+  const sharesOf = (expense: Expense) => payerShares(expense, memberIds);
+
+  function payerLabel(expense: Expense) {
+    if (expense.paidBy !== SPLIT_PAYER) return personName(expense.paidBy);
+    const shares = Object.entries(sharesOf(expense));
+    if (shares.length === 0) return "Dividido";
+    return `Dividido: ${shares.map(([id, share]) => `${firstName(personName(id))} ${Math.round(share * 100)}%`).join(" · ")}`;
+  }
 
   useEffect(() => {
     if (form.tipo === "cartao" && cards.length > 0 && !cards.some((card) => card.id === form.cardId)) {
@@ -149,11 +168,21 @@ export default function GastosPage() {
 
   const entries = month ? expensesInMonth(list, month) : [];
   const scoped = entries.filter((entry) => inScope(entry.expense, scope));
-  const payerKey = (entry: ExpenseEntry) =>
-    entry.expense.paidBy && people.some((person) => person.id === entry.expense.paidBy) ? entry.expense.paidBy : "nenhum";
+  function knownShares(expense: Expense) {
+    const shares = Object.entries(sharesOf(expense)).filter(([id]) => people.some((person) => person.id === id));
+    return shares.length > 0 ? shares : [["nenhum", 1] as [string, number]];
+  }
+
+  function onlyPayer(items: ExpenseEntry[]) {
+    if (!filterPayer) return items;
+    return items.flatMap((entry) => {
+      const share = knownShares(entry.expense).find(([id]) => id === filterPayer)?.[1] ?? 0;
+      return share > 0 ? [{ ...entry, amount: entry.amount * share, share }] : [];
+    });
+  }
+
   const matchCategory = (entry: ExpenseEntry) => !filterCategory || entry.expense.category === filterCategory;
-  const matchPayer = (entry: ExpenseEntry) => !filterPayer || payerKey(entry) === filterPayer;
-  const visible = scoped.filter((entry) => matchCategory(entry) && matchPayer(entry));
+  const visible: Array<ExpenseEntry & { share?: number }> = onlyPayer(scoped.filter(matchCategory));
   const filtering = Boolean(filterCategory || filterPayer);
 
   function groupTotals(items: ExpenseEntry[], keyOf: (entry: ExpenseEntry) => string) {
@@ -162,8 +191,18 @@ export default function GastosPage() {
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
   }
 
-  const byCategory = groupTotals(scoped.filter(matchPayer), (entry) => entry.expense.category);
-  const byPayer = groupTotals(scoped.filter(matchCategory), payerKey);
+  function payerTotals(items: ExpenseEntry[]) {
+    const totals = new Map<string, number>();
+    for (const entry of items) {
+      for (const [id, share] of knownShares(entry.expense)) {
+        totals.set(id, (totals.get(id) ?? 0) + entry.amount * share);
+      }
+    }
+    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
+  }
+
+  const byCategory = groupTotals(onlyPayer(scoped), (entry) => entry.expense.category);
+  const byPayer = payerTotals(scoped.filter(matchCategory));
   const monthCategories = Array.from(new Set(scoped.map((entry) => entry.expense.category))).sort();
   const totalOf = (kind: ExpenseKind) =>
     visible.filter((entry) => entry.kind === kind).reduce((sum, entry) => sum + entry.amount, 0);
@@ -173,9 +212,17 @@ export default function GastosPage() {
   const familyTotal = familyEntries.reduce((sum, entry) => sum + entry.amount, 0);
   const familyMembers = people.filter((person) => family.membros.some((member) => member.personId === person.id));
   const equalShare = familyMembers.length > 0 ? familyTotal / familyMembers.length : 0;
-  const unassigned = familyEntries
-    .filter((entry) => !familyMembers.some((person) => person.id === entry.expense.paidBy))
-    .reduce((sum, entry) => sum + entry.amount, 0);
+  const familyPaid = new Map<string, number>();
+  let unassigned = 0;
+  for (const entry of familyEntries) {
+    let assigned = 0;
+    for (const [id, share] of Object.entries(sharesOf(entry.expense))) {
+      if (!familyMembers.some((person) => person.id === id)) continue;
+      familyPaid.set(id, (familyPaid.get(id) ?? 0) + entry.amount * share);
+      assigned += share;
+    }
+    unassigned += entry.amount * Math.max(0, 1 - assigned);
+  }
 
   function persist(next: Expense[]) {
     setList(next);
@@ -205,7 +252,20 @@ export default function GastosPage() {
       cardId: form.tipo === "cartao" ? form.cardId || undefined : undefined,
       parcelas,
       fimMes: form.tipo === "fixo" ? original?.fimMes : undefined,
+      split: undefined,
     };
+    if (form.paidBy === SPLIT_PAYER) {
+      const split = Object.fromEntries(
+        payers
+          .map((person) => [person.id, parseMoney(form.split[person.id] ?? "")] as const)
+          .filter(([, value]) => Number.isFinite(value) && value > 0),
+      );
+      if (Object.keys(split).length === 0) {
+        setError("Informe a porcentagem de cada pessoa na divisão.");
+        return;
+      }
+      expense.split = split;
+    }
     setError("");
 
     if (original && editing) {
@@ -253,6 +313,15 @@ export default function GastosPage() {
       paidBy: expense.paidBy ?? "",
       cardId: expense.cardId ?? "",
       parcelas: String(expense.parcelas ?? 1),
+      split:
+        expense.paidBy === SPLIT_PAYER
+          ? Object.fromEntries(
+              Object.entries(sharesOf(expense)).map(([id, share]) => [
+                id,
+                String(Math.round(share * 10000) / 100).replace(".", ","),
+              ]),
+            )
+          : {},
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -399,16 +468,74 @@ export default function GastosPage() {
             </SelectInput>
           </Field>
           <Field label="Quem pagou">
-            <SelectInput value={form.paidBy} onChange={(event) => setForm({ ...form, paidBy: event.target.value })}>
+            <SelectInput
+              value={form.paidBy}
+              onChange={(event) => {
+                const paidBy = event.target.value;
+                setForm({
+                  ...form,
+                  paidBy,
+                  split: paidBy === SPLIT_PAYER && Object.keys(form.split).length === 0 ? equalSplit() : form.split,
+                });
+              }}
+            >
               {payers.length === 0 ? <option value="">Não informado</option> : null}
               {payers.map((person) => (
                 <option key={person.id} value={person.id}>
                   {person.nome}
                 </option>
               ))}
+              {payers.length > 1 ? <option value={SPLIT_PAYER}>Dividido</option> : null}
             </SelectInput>
           </Field>
         </div>
+        {form.paidBy === SPLIT_PAYER ? (
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Divisão do valor</p>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, split: equalSplit() })}
+                className="text-xs text-[var(--color-accent)] hover:underline"
+              >
+                Dividir igualmente
+              </button>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {payers.map((person) => {
+                const percent = parseMoney(form.split[person.id] ?? "");
+                const amount = parseMoney(form.amount);
+                return (
+                  <Field key={person.id} label={`${person.nome} (%)`}>
+                    <TextInput
+                      inputMode="decimal"
+                      value={form.split[person.id] ?? ""}
+                      onChange={(event) =>
+                        setForm({ ...form, split: { ...form.split, [person.id]: event.target.value } })
+                      }
+                    />
+                    {Number.isFinite(percent) && Number.isFinite(amount) ? (
+                      <span className="mt-1 block text-xs text-[var(--color-muted)]">
+                        {formatBRL((amount * percent) / 100)}
+                      </span>
+                    ) : null}
+                  </Field>
+                );
+              })}
+            </div>
+            {(() => {
+              const sum = payers.reduce((acc, person) => {
+                const value = parseMoney(form.split[person.id] ?? "");
+                return acc + (Number.isFinite(value) ? value : 0);
+              }, 0);
+              return Math.abs(sum - 100) > 0.01 ? (
+                <p className="mt-2 text-xs text-[var(--color-warning)]">
+                  A soma está em {sum.toFixed(2).replace(".", ",")}%. O valor será dividido proporcionalmente.
+                </p>
+              ) : null;
+            })()}
+          </div>
+        ) : null}
         {form.tipo === "cartao" && Number(form.parcelas) > 1 && parseMoney(form.amount) > 0 ? (
           <p className="text-sm text-[var(--color-muted)]">
             {form.parcelas}x de {formatBRL(parseMoney(form.amount) / Number(form.parcelas))}
@@ -622,8 +749,15 @@ export default function GastosPage() {
                       </td>
                       <td className="px-5 py-3">{entry.expense.category}</td>
                       <td className="px-5 py-3">{entry.expense.scope === "familia" ? "Família" : "Pessoal"}</td>
-                      <td className="px-5 py-3">{personName(entry.expense.paidBy)}</td>
-                      <td className="px-5 py-3 text-right font-semibold">{formatBRL(entry.amount)}</td>
+                      <td className="px-5 py-3">{payerLabel(entry.expense)}</td>
+                      <td className="px-5 py-3 text-right font-semibold">
+                        {formatBRL(entry.amount)}
+                        {"share" in entry && entry.share !== undefined && entry.share < 1 ? (
+                          <span className="block text-xs font-normal text-[var(--color-muted)]">
+                            parte de {Math.round(entry.share * 100)}%
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-3">
                           <button
@@ -681,9 +815,7 @@ export default function GastosPage() {
         ) : (
           <ul className="mt-3 space-y-2 text-sm">
             {familyMembers.map((person) => {
-              const paid = familyEntries
-                .filter((entry) => entry.expense.paidBy === person.id)
-                .reduce((sum, entry) => sum + entry.amount, 0);
+              const paid = familyPaid.get(person.id) ?? 0;
               const share = familyTotal > 0 ? Math.round((paid / familyTotal) * 100) : 0;
               const balance = paid - equalShare;
               return (

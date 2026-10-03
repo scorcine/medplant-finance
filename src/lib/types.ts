@@ -37,7 +37,21 @@ export type Expense = {
   parcelas?: number;
   fimMes?: string;
   importKey?: string;
+  split?: Record<string, number>;
 };
+
+export const SPLIT_PAYER = "dividido";
+
+export function payerShares(expense: Expense, memberIds: string[]): Record<string, number> {
+  if (expense.paidBy === SPLIT_PAYER) {
+    const entries = Object.entries(expense.split ?? {}).filter(([, value]) => value > 0);
+    const total = entries.reduce((sum, [, value]) => sum + value, 0);
+    if (total > 0) return Object.fromEntries(entries.map(([id, value]) => [id, value / total]));
+    if (memberIds.length === 0) return {};
+    return Object.fromEntries(memberIds.map((id) => [id, 1 / memberIds.length]));
+  }
+  return expense.paidBy ? { [expense.paidBy]: 1 } : {};
+}
 
 export type ExpenseKind = "fixo" | "cartao" | "variavel";
 
