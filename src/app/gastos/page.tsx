@@ -106,6 +106,7 @@ export default function GastosPage() {
   const [notice, setNotice] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPayer, setFilterPayer] = useState("");
+  const [lastEditedId, setLastEditedId] = useState("");
 
   useEffect(() => {
     function refresh() {
@@ -156,15 +157,42 @@ export default function GastosPage() {
     return `Dividido: ${values.map(([id, value]) => `${firstName(personName(id))} ${formatBRL(value)}`).join(" · ")}`;
   }
 
-  const remainderPayer = payers[payers.length - 1];
+  function fillSplit(split: Record<string, string>, amountText: string, editedId?: string) {
+    const total = parseMoney(amountText);
+    if (!Number.isFinite(total)) return split;
+    const next = { ...split };
+    const valueOf = (id: string) => parseMoney(next[id] ?? "");
+    if (payers.length === 2) {
+      if (editedId && !Number.isFinite(valueOf(editedId))) return next;
+      const source = editedId && payers.some((person) => person.id === editedId) ? editedId : lastEditedId;
+      const sourceId = source && Number.isFinite(valueOf(source)) ? source : payers.find((person) => Number.isFinite(valueOf(person.id)))?.id;
+      if (!sourceId) return next;
+      const other = payers.find((person) => person.id !== sourceId);
+      if (other) next[other.id] = toInput(Math.max(0, roundCents(total - valueOf(sourceId))));
+      return next;
+    }
+    const blanks = payers.filter((person) => !Number.isFinite(valueOf(person.id)));
+    if (blanks.length === 1) {
+      const filled = payers.reduce((sum, person) => sum + (Number.isFinite(valueOf(person.id)) ? valueOf(person.id) : 0), 0);
+      const rest = roundCents(total - filled);
+      if (rest >= 0) next[blanks[0].id] = toInput(rest);
+    }
+    return next;
+  }
+
+  function setSplitValue(id: string, text: string) {
+    setLastEditedId(id);
+    setForm({ ...form, split: fillSplit({ ...form.split, [id]: text }, form.amount, id) });
+  }
+
   const formTotal = parseMoney(form.amount);
-  const othersSum = roundCents(
-    payers.slice(0, -1).reduce((sum, person) => {
+  const splitSum = roundCents(
+    payers.reduce((sum, person) => {
       const value = parseMoney(form.split[person.id] ?? "");
       return sum + (Number.isFinite(value) ? value : 0);
     }, 0),
   );
-  const remainder = Number.isFinite(formTotal) ? roundCents(formTotal - othersSum) : Number.NaN;
+  const splitDiff = Number.isFinite(formTotal) ? roundCents(formTotal - splitSum) : 0;
 
   useEffect(() => {
     if (form.tipo === "cartao" && cards.length > 0 && !cards.some((card) => card.id === form.cardId)) {
@@ -275,16 +303,21 @@ export default function GastosPage() {
       splitMode: undefined,
     };
     if (form.paidBy === SPLIT_PAYER) {
-      if (!remainderPayer || !Number.isFinite(remainder) || remainder < 0) {
-        setError("A soma do que cada um pagou passa do valor total.");
-        return;
-      }
+      const filled = fillSplit(form.split, form.amount);
       const split: Record<string, number> = {};
-      for (const person of payers.slice(0, -1)) {
-        const value = parseMoney(form.split[person.id] ?? "");
+      for (const person of payers) {
+        const value = parseMoney(filled[person.id] ?? "");
         if (Number.isFinite(value) && value > 0) split[person.id] = roundCents(value);
       }
-      if (remainder > 0) split[remainderPayer.id] = remainder;
+      const diff = roundCents(amount - Object.values(split).reduce((sum, value) => sum + value, 0));
+      if (Math.abs(diff) >= 0.01) {
+        setError(
+          diff > 0
+            ? `A divisão está faltando ${formatBRL(diff)} para chegar ao total de ${formatBRL(amount)}.`
+            : `A divisão passou ${formatBRL(-diff)} do total de ${formatBRL(amount)}.`,
+        );
+        return;
+      }
       expense.split = split;
       expense.splitMode = "valor";
     }
@@ -416,7 +449,16 @@ export default function GastosPage() {
             <TextInput
               inputMode="decimal"
               value={form.amount}
-              onChange={(event) => setForm({ ...form, amount: event.target.value })}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  amount: event.target.value,
+                  split:
+                    form.paidBy === SPLIT_PAYER && payers.length === 2
+                      ? fillSplit(form.split, event.target.value)
+                      : form.split,
+                })
+              }
               required
             />
           </Field>
@@ -519,43 +561,33 @@ export default function GastosPage() {
               </button>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {payers.slice(0, -1).map((person) => (
+              {payers.map((person) => (
                 <Field key={person.id} label={`${person.nome} pagou (R$)`}>
                   <TextInput
                     inputMode="decimal"
                     value={form.split[person.id] ?? ""}
-                    onChange={(event) => setForm({ ...form, split: { ...form.split, [person.id]: event.target.value } })}
+                    onChange={(event) => setSplitValue(person.id, event.target.value)}
                   />
                 </Field>
               ))}
-              {remainderPayer ? (
-                <Field label={`${remainderPayer.nome} pagou (R$)`}>
-                  <p
-                    className={cn(
-                      "rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm font-semibold",
-                      Number.isFinite(remainder) && remainder < 0 && "text-[var(--color-danger)]",
-                    )}
-                  >
-                    {Number.isFinite(remainder) ? formatBRL(remainder) : "—"}
-                  </p>
-                  <span className="mt-1 block text-xs text-[var(--color-muted)]">Calculado: total menos o que os outros pagaram</span>
-                </Field>
-              ) : null}
             </div>
             {Number.isFinite(formTotal) ? (
               <p
                 className={cn(
                   "mt-3 text-sm",
-                  remainder < 0 ? "text-[var(--color-danger)]" : "text-[var(--color-muted)]",
+                  Math.abs(splitDiff) >= 0.01 ? "text-[var(--color-danger)]" : "text-[var(--color-muted)]",
                 )}
               >
-                {formatBRL(formTotal)}
-                {payers.slice(0, -1).map((person) => {
-                  const value = parseMoney(form.split[person.id] ?? "");
-                  return ` − ${firstName(person.nome)} ${formatBRL(Number.isFinite(value) ? value : 0)}`;
-                })}{" "}
-                = {remainderPayer ? firstName(remainderPayer.nome) : ""} {formatBRL(Number.isFinite(remainder) ? remainder : 0)}
-                {remainder < 0 ? " (a soma passou do total)" : ""}
+                {payers
+                  .map((person) => {
+                    const value = parseMoney(form.split[person.id] ?? "");
+                    return `${firstName(person.nome)} ${formatBRL(Number.isFinite(value) ? value : 0)}`;
+                  })
+                  .join(" + ")}{" "}
+                = {formatBRL(splitSum)} de {formatBRL(formTotal)}
+                {splitDiff >= 0.01 ? ` · faltam ${formatBRL(splitDiff)}` : ""}
+                {splitDiff <= -0.01 ? ` · passou ${formatBRL(-splitDiff)}` : ""}
+                {Math.abs(splitDiff) < 0.01 ? " ✓" : ""}
               </p>
             ) : null}
           </div>
