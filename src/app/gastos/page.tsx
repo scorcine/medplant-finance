@@ -15,7 +15,9 @@ import {
   type ExpenseKind,
   type ViewScope,
   SPLIT_PAYER,
-  payerShares,
+  payerAmounts,
+  roundCents,
+  splitExact,
 } from "@/lib/types";
 import {
   currentMonthKey,
@@ -132,20 +134,37 @@ export default function GastosPage() {
     }
   }, [payers, form.paidBy]);
 
-  function equalSplit() {
-    const each = payers.length > 0 ? 100 / payers.length : 0;
-    return Object.fromEntries(payers.map((person) => [person.id, String(Math.round(each * 100) / 100).replace(".", ",")]));
+  const toInput = (value: number) => value.toFixed(2).replace(".", ",");
+
+  function equalSplit(amountText: string) {
+    const amount = parseMoney(amountText);
+    if (!Number.isFinite(amount) || payers.length === 0) return {};
+    const values = splitExact(
+      amount,
+      payers.map((person) => [person.id, 1 / payers.length]),
+    );
+    return Object.fromEntries(values.map(([id, value]) => [id, toInput(value)]));
   }
 
   const memberIds = payers.map((person) => person.id);
-  const sharesOf = (expense: Expense) => payerShares(expense, memberIds);
+  const amountsOf = (amount: number, expense: Expense) => payerAmounts(amount, expense, memberIds);
 
-  function payerLabel(expense: Expense) {
+  function payerLabel(expense: Expense, amount: number) {
     if (expense.paidBy !== SPLIT_PAYER) return personName(expense.paidBy);
-    const shares = Object.entries(sharesOf(expense));
-    if (shares.length === 0) return "Dividido";
-    return `Dividido: ${shares.map(([id, share]) => `${firstName(personName(id))} ${Math.round(share * 100)}%`).join(" · ")}`;
+    const values = amountsOf(amount, expense);
+    if (values.length === 0) return "Dividido";
+    return `Dividido: ${values.map(([id, value]) => `${firstName(personName(id))} ${formatBRL(value)}`).join(" · ")}`;
   }
+
+  const remainderPayer = payers[payers.length - 1];
+  const formTotal = parseMoney(form.amount);
+  const othersSum = roundCents(
+    payers.slice(0, -1).reduce((sum, person) => {
+      const value = parseMoney(form.split[person.id] ?? "");
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0),
+  );
+  const remainder = Number.isFinite(formTotal) ? roundCents(formTotal - othersSum) : Number.NaN;
 
   useEffect(() => {
     if (form.tipo === "cartao" && cards.length > 0 && !cards.some((card) => card.id === form.cardId)) {
@@ -168,21 +187,21 @@ export default function GastosPage() {
 
   const entries = month ? expensesInMonth(list, month) : [];
   const scoped = entries.filter((entry) => inScope(entry.expense, scope));
-  function knownShares(expense: Expense) {
-    const shares = Object.entries(sharesOf(expense)).filter(([id]) => people.some((person) => person.id === id));
-    return shares.length > 0 ? shares : [["nenhum", 1] as [string, number]];
+  function knownAmounts(entry: ExpenseEntry) {
+    const values = amountsOf(entry.amount, entry.expense).filter(([id]) => people.some((person) => person.id === id));
+    return values.length > 0 ? values : [["nenhum", entry.amount] as [string, number]];
   }
 
   function onlyPayer(items: ExpenseEntry[]) {
     if (!filterPayer) return items;
     return items.flatMap((entry) => {
-      const share = knownShares(entry.expense).find(([id]) => id === filterPayer)?.[1] ?? 0;
-      return share > 0 ? [{ ...entry, amount: entry.amount * share, share }] : [];
+      const part = knownAmounts(entry).find(([id]) => id === filterPayer)?.[1] ?? 0;
+      return part > 0 ? [{ ...entry, amount: part, fullAmount: entry.amount }] : [];
     });
   }
 
   const matchCategory = (entry: ExpenseEntry) => !filterCategory || entry.expense.category === filterCategory;
-  const visible: Array<ExpenseEntry & { share?: number }> = onlyPayer(scoped.filter(matchCategory));
+  const visible: Array<ExpenseEntry & { fullAmount?: number }> = onlyPayer(scoped.filter(matchCategory));
   const filtering = Boolean(filterCategory || filterPayer);
 
   function groupTotals(items: ExpenseEntry[], keyOf: (entry: ExpenseEntry) => string) {
@@ -194,8 +213,8 @@ export default function GastosPage() {
   function payerTotals(items: ExpenseEntry[]) {
     const totals = new Map<string, number>();
     for (const entry of items) {
-      for (const [id, share] of knownShares(entry.expense)) {
-        totals.set(id, (totals.get(id) ?? 0) + entry.amount * share);
+      for (const [id, value] of knownAmounts(entry)) {
+        totals.set(id, roundCents((totals.get(id) ?? 0) + value));
       }
     }
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
@@ -216,12 +235,12 @@ export default function GastosPage() {
   let unassigned = 0;
   for (const entry of familyEntries) {
     let assigned = 0;
-    for (const [id, share] of Object.entries(sharesOf(entry.expense))) {
+    for (const [id, value] of amountsOf(entry.amount, entry.expense)) {
       if (!familyMembers.some((person) => person.id === id)) continue;
-      familyPaid.set(id, (familyPaid.get(id) ?? 0) + entry.amount * share);
-      assigned += share;
+      familyPaid.set(id, roundCents((familyPaid.get(id) ?? 0) + value));
+      assigned = roundCents(assigned + value);
     }
-    unassigned += entry.amount * Math.max(0, 1 - assigned);
+    unassigned = roundCents(unassigned + Math.max(0, entry.amount - assigned));
   }
 
   function persist(next: Expense[]) {
@@ -253,18 +272,21 @@ export default function GastosPage() {
       parcelas,
       fimMes: form.tipo === "fixo" ? original?.fimMes : undefined,
       split: undefined,
+      splitMode: undefined,
     };
     if (form.paidBy === SPLIT_PAYER) {
-      const split = Object.fromEntries(
-        payers
-          .map((person) => [person.id, parseMoney(form.split[person.id] ?? "")] as const)
-          .filter(([, value]) => Number.isFinite(value) && value > 0),
-      );
-      if (Object.keys(split).length === 0) {
-        setError("Informe a porcentagem de cada pessoa na divisão.");
+      if (!remainderPayer || !Number.isFinite(remainder) || remainder < 0) {
+        setError("A soma do que cada um pagou passa do valor total.");
         return;
       }
+      const split: Record<string, number> = {};
+      for (const person of payers.slice(0, -1)) {
+        const value = parseMoney(form.split[person.id] ?? "");
+        if (Number.isFinite(value) && value > 0) split[person.id] = roundCents(value);
+      }
+      if (remainder > 0) split[remainderPayer.id] = remainder;
       expense.split = split;
+      expense.splitMode = "valor";
     }
     setError("");
 
@@ -315,12 +337,7 @@ export default function GastosPage() {
       parcelas: String(expense.parcelas ?? 1),
       split:
         expense.paidBy === SPLIT_PAYER
-          ? Object.fromEntries(
-              Object.entries(sharesOf(expense)).map(([id, share]) => [
-                id,
-                String(Math.round(share * 10000) / 100).replace(".", ","),
-              ]),
-            )
+          ? Object.fromEntries(amountsOf(expense.amount, expense).map(([id, value]) => [id, toInput(value)]))
           : {},
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -475,7 +492,7 @@ export default function GastosPage() {
                 setForm({
                   ...form,
                   paidBy,
-                  split: paidBy === SPLIT_PAYER && Object.keys(form.split).length === 0 ? equalSplit() : form.split,
+                  split: paidBy === SPLIT_PAYER && Object.keys(form.split).length === 0 ? equalSplit(form.amount) : form.split,
                 });
               }}
             >
@@ -495,45 +512,52 @@ export default function GastosPage() {
               <p className="text-sm font-semibold">Divisão do valor</p>
               <button
                 type="button"
-                onClick={() => setForm({ ...form, split: equalSplit() })}
+                onClick={() => setForm({ ...form, split: equalSplit(form.amount) })}
                 className="text-xs text-[var(--color-accent)] hover:underline"
               >
                 Dividir igualmente
               </button>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {payers.map((person) => {
-                const percent = parseMoney(form.split[person.id] ?? "");
-                const amount = parseMoney(form.amount);
-                return (
-                  <Field key={person.id} label={`${person.nome} (%)`}>
-                    <TextInput
-                      inputMode="decimal"
-                      value={form.split[person.id] ?? ""}
-                      onChange={(event) =>
-                        setForm({ ...form, split: { ...form.split, [person.id]: event.target.value } })
-                      }
-                    />
-                    {Number.isFinite(percent) && Number.isFinite(amount) ? (
-                      <span className="mt-1 block text-xs text-[var(--color-muted)]">
-                        {formatBRL((amount * percent) / 100)}
-                      </span>
-                    ) : null}
-                  </Field>
-                );
-              })}
+              {payers.slice(0, -1).map((person) => (
+                <Field key={person.id} label={`${person.nome} pagou (R$)`}>
+                  <TextInput
+                    inputMode="decimal"
+                    value={form.split[person.id] ?? ""}
+                    onChange={(event) => setForm({ ...form, split: { ...form.split, [person.id]: event.target.value } })}
+                  />
+                </Field>
+              ))}
+              {remainderPayer ? (
+                <Field label={`${remainderPayer.nome} pagou (R$)`}>
+                  <p
+                    className={cn(
+                      "rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm font-semibold",
+                      Number.isFinite(remainder) && remainder < 0 && "text-[var(--color-danger)]",
+                    )}
+                  >
+                    {Number.isFinite(remainder) ? formatBRL(remainder) : "—"}
+                  </p>
+                  <span className="mt-1 block text-xs text-[var(--color-muted)]">Calculado: total menos o que os outros pagaram</span>
+                </Field>
+              ) : null}
             </div>
-            {(() => {
-              const sum = payers.reduce((acc, person) => {
-                const value = parseMoney(form.split[person.id] ?? "");
-                return acc + (Number.isFinite(value) ? value : 0);
-              }, 0);
-              return Math.abs(sum - 100) > 0.01 ? (
-                <p className="mt-2 text-xs text-[var(--color-warning)]">
-                  A soma está em {sum.toFixed(2).replace(".", ",")}%. O valor será dividido proporcionalmente.
-                </p>
-              ) : null;
-            })()}
+            {Number.isFinite(formTotal) ? (
+              <p
+                className={cn(
+                  "mt-3 text-sm",
+                  remainder < 0 ? "text-[var(--color-danger)]" : "text-[var(--color-muted)]",
+                )}
+              >
+                {formatBRL(formTotal)}
+                {payers.slice(0, -1).map((person) => {
+                  const value = parseMoney(form.split[person.id] ?? "");
+                  return ` − ${firstName(person.nome)} ${formatBRL(Number.isFinite(value) ? value : 0)}`;
+                })}{" "}
+                = {remainderPayer ? firstName(remainderPayer.nome) : ""} {formatBRL(Number.isFinite(remainder) ? remainder : 0)}
+                {remainder < 0 ? " (a soma passou do total)" : ""}
+              </p>
+            ) : null}
           </div>
         ) : null}
         {form.tipo === "cartao" && Number(form.parcelas) > 1 && parseMoney(form.amount) > 0 ? (
@@ -749,12 +773,12 @@ export default function GastosPage() {
                       </td>
                       <td className="px-5 py-3">{entry.expense.category}</td>
                       <td className="px-5 py-3">{entry.expense.scope === "familia" ? "Família" : "Pessoal"}</td>
-                      <td className="px-5 py-3">{payerLabel(entry.expense)}</td>
+                      <td className="px-5 py-3">{payerLabel(entry.expense, entry.fullAmount ?? entry.amount)}</td>
                       <td className="px-5 py-3 text-right font-semibold">
                         {formatBRL(entry.amount)}
-                        {"share" in entry && entry.share !== undefined && entry.share < 1 ? (
+                        {entry.fullAmount !== undefined && entry.fullAmount !== entry.amount ? (
                           <span className="block text-xs font-normal text-[var(--color-muted)]">
-                            parte de {Math.round(entry.share * 100)}%
+                            parte do total de {formatBRL(entry.fullAmount)}
                           </span>
                         ) : null}
                       </td>

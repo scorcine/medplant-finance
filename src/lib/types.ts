@@ -38,7 +38,24 @@ export type Expense = {
   fimMes?: string;
   importKey?: string;
   split?: Record<string, number>;
+  splitMode?: "valor" | "percentual";
 };
+
+export function roundCents(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+export function splitExact(total: number, shares: Array<[string, number]>): Array<[string, number]> {
+  if (shares.length === 0) return [];
+  const result: Array<[string, number]> = [];
+  let used = 0;
+  shares.forEach(([id, share], index) => {
+    const value = index === shares.length - 1 ? roundCents(total - used) : roundCents(total * share);
+    used = roundCents(used + value);
+    result.push([id, value]);
+  });
+  return result;
+}
 
 export const SPLIT_PAYER = "dividido";
 
@@ -51,6 +68,10 @@ export function payerShares(expense: Expense, memberIds: string[]): Record<strin
     return Object.fromEntries(memberIds.map((id) => [id, 1 / memberIds.length]));
   }
   return expense.paidBy ? { [expense.paidBy]: 1 } : {};
+}
+
+export function payerAmounts(amount: number, expense: Expense, memberIds: string[]): Array<[string, number]> {
+  return splitExact(amount, Object.entries(payerShares(expense, memberIds)));
 }
 
 export type ExpenseKind = "fixo" | "cartao" | "variavel";
