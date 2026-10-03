@@ -22,6 +22,7 @@ import {
   payerAmounts,
   roundCents,
   type Expense,
+  type ExpenseEntry,
   type ExpenseKind,
   type Income,
   type Shift,
@@ -49,6 +50,14 @@ function firstName(name: string) {
 
 const blankIncome = { description: "", amount: "", month: "", personId: "", fixo: false };
 
+type View = "consolidado" | "familia" | "individual";
+
+const VIEWS: { id: View; label: string }[] = [
+  { id: "consolidado", label: "Consolidado" },
+  { id: "familia", label: "Família" },
+  { id: "individual", label: "Individual" },
+];
+
 export default function BalancoPage() {
   const [month, setMonth] = useState("");
   const [people, setPeople] = useState<Person[]>([]);
@@ -60,6 +69,8 @@ export default function BalancoPage() {
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [form, setForm] = useState(blankIncome);
   const [error, setError] = useState("");
+  const [view, setView] = useState<View>("consolidado");
+  const [focusId, setFocusId] = useState("");
 
   useEffect(() => {
     function refresh() {
@@ -78,6 +89,7 @@ export default function BalancoPage() {
     const current = currentMonthKey();
     setMonth(current);
     setForm((value) => ({ ...value, month: shiftMonth(current, -1), personId: loadOwner()?.id ?? "" }));
+    setFocusId(loadOwner()?.id ?? "");
     window.addEventListener(DATA_EVENT, refresh);
     return () => window.removeEventListener(DATA_EVENT, refresh);
   }, []);
@@ -91,6 +103,10 @@ export default function BalancoPage() {
     return people.find((person) => person.id === id)?.nome ?? "Não informado";
   }
 
+  function keepPerson(id: string) {
+    return view !== "individual" || id === focusId;
+  }
+
   function earningsOf(earnMonth: string) {
     const byPerson = new Map<string, number>();
     const add = (id: string, value: number) => byPerson.set(id, roundCents((byPerson.get(id) ?? 0) + value));
@@ -100,23 +116,35 @@ export default function BalancoPage() {
       if (!shift.date.startsWith(earnMonth)) continue;
       const rate = places.find((place) => place.id === shift.locationId)?.defaultRate;
       if (!rate) continue;
+      const who = shift.calendarId || ownerId || "nenhum";
+      if (!keepPerson(who)) continue;
       shiftTotal = roundCents(shiftTotal + rate);
       shiftCount += 1;
-      add(shift.calendarId ?? ownerId ?? "nenhum", rate);
+      add(who, rate);
     }
-    const others = incomesInMonth(incomes, earnMonth);
+    const others = incomesInMonth(incomes, earnMonth).filter((income) => keepPerson(income.personId ?? "nenhum"));
     for (const income of others) add(income.personId ?? "nenhum", income.amount);
     const otherTotal = roundCents(others.reduce((sum, income) => sum + income.amount, 0));
     return { byPerson, shiftTotal, shiftCount, others, otherTotal, total: roundCents(shiftTotal + otherTotal) };
   }
 
+  function partsOf(entry: ExpenseEntry): Array<[string, number]> {
+    const parts = payerAmounts(entry.amount, entry.expense, memberIds);
+    if (parts.length > 0) return parts;
+    return [[entry.expense.scope === "pessoal" && ownerId ? ownerId : "nenhum", entry.amount]];
+  }
+
   function spendingOf(spendMonth: string) {
-    const entries = expensesInMonth(expenses, spendMonth);
+    const entries = expensesInMonth(expenses, spendMonth).flatMap((entry) => {
+      if (view === "familia" && entry.expense.scope !== "familia") return [];
+      const parts = partsOf(entry);
+      if (view !== "individual") return [{ ...entry, parts }];
+      const mine = roundCents(parts.filter(([id]) => id === focusId).reduce((sum, [, value]) => sum + value, 0));
+      return mine > 0 ? [{ ...entry, amount: mine, parts: [[focusId, mine]] as Array<[string, number]> }] : [];
+    });
     const byPerson = new Map<string, number>();
     for (const entry of entries) {
-      const parts = payerAmounts(entry.amount, entry.expense, memberIds);
-      const assigned = parts.length > 0 ? parts : [["nenhum", entry.amount] as [string, number]];
-      for (const [id, value] of assigned) byPerson.set(id, roundCents((byPerson.get(id) ?? 0) + value));
+      for (const [id, value] of entry.parts) byPerson.set(id, roundCents((byPerson.get(id) ?? 0) + value));
     }
     const byKind = Object.fromEntries(
       KINDS.map((kind) => [
@@ -139,6 +167,13 @@ export default function BalancoPage() {
   const personIds = Array.from(
     new Set([...memberIds, ...earnings.byPerson.keys(), ...spending.byPerson.keys()].filter((id) => id !== "nenhum")),
   );
+  const focusName = firstName(personName(focusId));
+  const viewHint =
+    view === "familia"
+      ? "Ganhos de todos contra os gastos marcados como Família."
+      : view === "individual"
+        ? `Ganhos de ${focusName} contra os gastos pessoais dele(a) e a parte que pagou dos gastos da família.`
+        : "Todos os ganhos contra todos os gastos, pessoais e da família.";
   const unassignedEarn = earnings.byPerson.get("nenhum") ?? 0;
   const unassignedSpend = spending.byPerson.get("nenhum") ?? 0;
 
@@ -227,13 +262,61 @@ export default function BalancoPage() {
         </button>
       </div>
 
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1" role="tablist" aria-label="Visão do balanço">
+            {VIEWS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={view === id}
+                onClick={() => setView(id)}
+                className={cn(
+                  "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                  view === id ? "bg-[var(--color-accent)] text-white shadow-sm" : "text-[var(--color-muted)] hover:text-[var(--color-foreground)]",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {view === "individual" ? (
+            <div className="flex flex-wrap gap-2">
+              {members.map((person) => (
+                <button
+                  key={person.id}
+                  type="button"
+                  onClick={() => setFocusId(person.id)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-sm font-medium",
+                    focusId === person.id
+                      ? "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+                      : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-foreground)]",
+                  )}
+                >
+                  {person.nome}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <p className="text-xs text-[var(--color-muted)]">{viewHint}</p>
+      </div>
+
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <p className="text-sm text-[var(--color-muted)]">Ganhos de {monthLabel(previous)}</p>
+          <p className="text-sm text-[var(--color-muted)]">
+            Ganhos de {monthLabel(previous)}
+            {view === "individual" ? ` · ${focusName}` : ""}
+          </p>
           <p className="mt-1 text-2xl font-semibold text-[var(--color-success)]">{formatBRL(earnings.total)}</p>
         </div>
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-          <p className="text-sm text-[var(--color-muted)]">Gastos de {monthLabel(month)}</p>
+          <p className="text-sm text-[var(--color-muted)]">
+            {view === "familia" ? "Gastos da família" : "Gastos"} de {monthLabel(month)}
+            {view === "individual" ? ` · ${focusName}` : ""}
+          </p>
           <p className="mt-1 text-2xl font-semibold text-[var(--color-danger)]">{formatBRL(spending.total)}</p>
         </div>
         <div
@@ -361,6 +444,8 @@ export default function BalancoPage() {
             Ver os gastos do mês
           </Link>
 
+          {view !== "individual" ? (
+          <>
           <h3 className="mt-6 font-semibold">Por pessoa</h3>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[420px] text-left text-sm">
@@ -399,6 +484,8 @@ export default function BalancoPage() {
               </tbody>
             </table>
           </div>
+          </>
+          ) : null}
         </section>
       </div>
 
