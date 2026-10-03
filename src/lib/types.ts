@@ -28,6 +28,7 @@ export type Expense = {
   category: string;
   scope: "pessoal" | "familia";
   payment: "debito" | "credito" | "pix" | "dinheiro";
+  paidBy?: string;
 };
 
 export type CreditCard = {

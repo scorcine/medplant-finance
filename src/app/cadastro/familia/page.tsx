@@ -2,18 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Plus, Trash2, Users } from "lucide-react";
+import { CheckCircle2, Users } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
-import {
-  loadFamily,
-  loadPeople,
-  saveFamily,
-  type FamilyGroup,
-  type FamilyPayment,
-  type Person,
-} from "@/lib/people";
-import { parseMoney } from "@/lib/records";
-import { formatBRL } from "@/lib/utils";
+import { loadFamily, loadPeople, saveFamily, type FamilyGroup, type Person } from "@/lib/people";
 
 const PARENTESCOS = ["Titular", "Cônjuge", "Filho(a)", "Pai", "Mãe", "Irmão(ã)", "Outro"];
 
@@ -22,8 +13,6 @@ export default function InclusaoFamiliaPage() {
   const [group, setGroup] = useState<FamilyGroup>({ nomeFamilia: "", divisao: "igual", membros: [] });
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-  const [drafts, setDrafts] = useState<Record<string, { descricao: string; valor: string }>>({});
-  const [paymentError, setPaymentError] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const loadedPeople = loadPeople();
@@ -70,40 +59,6 @@ export default function InclusaoFamiliaPage() {
       ),
     }));
   }
-
-  function paymentsOf(personId: string): FamilyPayment[] {
-    return group.membros.find((member) => member.personId === personId)?.pagamentos ?? [];
-  }
-
-  function updatePayments(personId: string, pagamentos: FamilyPayment[]) {
-    setSaved(false);
-    setGroup((current) => ({
-      ...current,
-      membros: current.membros.map((member) =>
-        member.personId === personId ? { ...member, pagamentos } : member,
-      ),
-    }));
-  }
-
-  function addPayment(personId: string) {
-    const draft = drafts[personId] ?? { descricao: "", valor: "" };
-    const valor = parseMoney(draft.valor);
-    if (!draft.descricao.trim() || !Number.isFinite(valor) || valor <= 0) {
-      setPaymentError((current) => ({ ...current, [personId]: "Informe o que paga e um valor maior que zero." }));
-      return;
-    }
-    setPaymentError((current) => ({ ...current, [personId]: "" }));
-    updatePayments(personId, [
-      ...paymentsOf(personId),
-      { id: crypto.randomUUID(), descricao: draft.descricao.trim(), valor },
-    ]);
-    setDrafts((current) => ({ ...current, [personId]: { descricao: "", valor: "" } }));
-  }
-
-  const totalCustom = group.membros.reduce(
-    (sum, member) => sum + (member.pagamentos ?? []).reduce((acc, item) => acc + item.valor, 0),
-    0,
-  );
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -188,6 +143,16 @@ export default function InclusaoFamiliaPage() {
             </Field>
           </div>
 
+          {group.divisao === "personalizado" ? (
+            <p className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-sm text-[var(--color-muted)]">
+              O que cada um paga é lançado mês a mês nos{" "}
+              <Link href="/gastos" className="text-[var(--color-accent)] hover:underline">
+                custos da família
+              </Link>
+              , escolhendo quem pagou em cada gasto.
+            </p>
+          ) : null}
+
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold">Pessoas para incluir</legend>
             {people.map((person) => {
@@ -228,109 +193,10 @@ export default function InclusaoFamiliaPage() {
                       </Field>
                     </div>
                   ) : null}
-                  {checked && group.divisao === "personalizado" ? (
-                    <div className="mt-4 space-y-3 pl-7">
-                      <p className="text-sm font-semibold">O que {person.nome.split(" ")[0]} paga</p>
-                      {paymentsOf(person.id).length > 0 ? (
-                        <ul className="space-y-2">
-                          {paymentsOf(person.id).map((item) => (
-                            <li
-                              key={item.id}
-                              className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm"
-                            >
-                              <span>{item.descricao}</span>
-                              <span className="flex items-center gap-3">
-                                <span className="font-semibold">{formatBRL(item.valor)}</span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updatePayments(
-                                      person.id,
-                                      paymentsOf(person.id).filter((payment) => payment.id !== item.id),
-                                    )
-                                  }
-                                  aria-label={`Remover ${item.descricao}`}
-                                >
-                                  <Trash2 className="h-4 w-4 text-[var(--color-danger)]" />
-                                </button>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
-                        <Field label="Despesa">
-                          <TextInput
-                            value={drafts[person.id]?.descricao ?? ""}
-                            onChange={(e) =>
-                              setDrafts((current) => ({
-                                ...current,
-                                [person.id]: { descricao: e.target.value, valor: current[person.id]?.valor ?? "" },
-                              }))
-                            }
-                          />
-                        </Field>
-                        <Field label="Valor mensal">
-                          <TextInput
-                            inputMode="decimal"
-                            value={drafts[person.id]?.valor ?? ""}
-                            onChange={(e) =>
-                              setDrafts((current) => ({
-                                ...current,
-                                [person.id]: { descricao: current[person.id]?.descricao ?? "", valor: e.target.value },
-                              }))
-                            }
-                          />
-                        </Field>
-                        <button
-                          type="button"
-                          onClick={() => addPayment(person.id)}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium hover:border-[var(--color-accent)]"
-                        >
-                          <Plus className="h-4 w-4" aria-hidden />
-                          Adicionar
-                        </button>
-                      </div>
-                      {paymentError[person.id] ? (
-                        <p className="text-sm text-[var(--color-danger)]">{paymentError[person.id]}</p>
-                      ) : null}
-                      <p className="text-sm text-[var(--color-muted)]">
-                        Total de {person.nome.split(" ")[0]}:{" "}
-                        <span className="font-semibold text-[var(--color-foreground)]">
-                          {formatBRL(paymentsOf(person.id).reduce((acc, item) => acc + item.valor, 0))}
-                        </span>
-                      </p>
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
           </fieldset>
-
-          {group.divisao === "personalizado" && group.membros.length > 0 ? (
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-4">
-              <p className="text-sm font-semibold">Resumo da divisão</p>
-              <ul className="mt-3 space-y-2 text-sm">
-                {group.membros.map((member) => {
-                  const person = people.find((item) => item.id === member.personId);
-                  const total = (member.pagamentos ?? []).reduce((acc, item) => acc + item.valor, 0);
-                  const share = totalCustom > 0 ? Math.round((total / totalCustom) * 100) : 0;
-                  return (
-                    <li key={member.personId} className="flex justify-between gap-3">
-                      <span>{person?.nome ?? "Pessoa"}</span>
-                      <span>
-                        {formatBRL(total)} <span className="text-[var(--color-muted)]">({share}%)</span>
-                      </span>
-                    </li>
-                  );
-                })}
-                <li className="flex justify-between gap-3 border-t border-[var(--color-border)] pt-2 font-semibold">
-                  <span>Total da casa</span>
-                  <span>{formatBRL(totalCustom)}</span>
-                </li>
-              </ul>
-            </div>
-          ) : null}
 
           {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
 
