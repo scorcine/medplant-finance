@@ -6,8 +6,16 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { ImportAgenda } from "@/components/import-agenda";
 import type { Shift, ShiftLocation } from "@/lib/types";
-import { loadLocations, todayKey } from "@/lib/records";
-import { addShift, loadCalendars, loadImportedShifts, mergeShifts, saveImportedShifts, type AgendaCalendar } from "@/lib/shifts-store";
+import { loadLocations, saveLocations, todayKey } from "@/lib/records";
+import {
+  addShift,
+  loadCalendars,
+  loadImportedShifts,
+  mergeShifts,
+  rematchImportedShifts,
+  saveImportedShifts,
+  type AgendaCalendar,
+} from "@/lib/shifts-store";
 import { cn, formatBRL } from "@/lib/utils";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -73,8 +81,20 @@ export default function AgendaPage() {
     });
   }
 
-  function assignLocation(id: string, locationId: string) {
-    const imported = loadImportedShifts().map((shift) => (shift.id === id ? { ...shift, locationId } : shift));
+  function assignLocation(shift: Shift, locationId: string) {
+    if (!locationId) return;
+    const code = shift.title?.trim();
+    const nextPlaces = places.map((place) =>
+      place.id === locationId && code && !(place.codes ?? []).some((item) => item.toLowerCase() === code.toLowerCase())
+        ? { ...place, codes: [...(place.codes?.length ? place.codes : [place.name]), code] }
+        : place,
+    );
+    saveLocations(nextPlaces);
+    setPlaces(nextPlaces);
+    const rematched = rematchImportedShifts(nextPlaces);
+    const imported = rematched.map((item) =>
+      item.id === shift.id ? { ...item, locationId, manualLocation: true } : item,
+    );
     saveImportedShifts(imported);
     setAgenda(mergeShifts(imported));
   }
@@ -220,22 +240,34 @@ export default function AgendaPage() {
                         </div>
                         {location ? <p className="text-sm font-semibold">{formatBRL(location.defaultRate)}</p> : null}
                       </div>
-                      {shift.id.startsWith("gcal-") && !location && places.length > 0 ? (
-                        <label className="mt-2 block text-xs text-[var(--color-muted)]">
-                          É plantão? Escolha o local para aplicar o valor
-                          <select
-                            className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)]"
-                            value={shift.locationId}
-                            onChange={(event) => assignLocation(shift.id, event.target.value)}
-                          >
-                            <option value="">Não é plantão</option>
-                            {places.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} · {formatBRL(item.defaultRate)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                      {shift.id.startsWith("gcal-") && !location ? (
+                        <div className="mt-2 space-y-2 text-xs text-[var(--color-muted)]">
+                          {places.length > 0 ? (
+                            <label className="block">
+                              É plantão? Escolha qual
+                              <select
+                                className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-sm text-[var(--color-foreground)]"
+                                value=""
+                                onChange={(event) => assignLocation(shift, event.target.value)}
+                              >
+                                <option value="">Não é plantão</option>
+                                {places.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.name} · {formatBRL(item.defaultRate)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
+                          {shift.title ? (
+                            <Link
+                              href={`/locais?codigo=${encodeURIComponent(shift.title)}`}
+                              className="inline-block text-[var(--color-accent)] hover:underline"
+                            >
+                              Cadastrar “{shift.title}” como novo plantão
+                            </Link>
+                          ) : null}
+                        </div>
                       ) : null}
                     </li>
                   );
@@ -270,9 +302,10 @@ export default function AgendaPage() {
 
       {places.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-[var(--color-border)] p-5 text-sm text-[var(--color-muted)]">
-          Cadastre os locais de plantão com o valor para a agenda reconhecer os plantões pelo nome.{" "}
+          Cadastre seus plantões com o código usado na agenda (por exemplo SAMU 19) e o valor. Também dá para clicar
+          num dia e cadastrar direto pelo compromisso.{" "}
           <Link href="/locais" className="text-[var(--color-accent)] hover:underline">
-            Cadastrar local
+            Cadastrar plantão
           </Link>
         </p>
       ) : (

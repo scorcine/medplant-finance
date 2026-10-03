@@ -70,7 +70,7 @@ export default function DashboardPage() {
   const steps = [
     { done: Boolean(owner), label: "Fazer meu cadastro", href: "/cadastro/pessoas" },
     { done: hasFamily, label: "Ligar as pessoas da família", href: "/cadastro/familia" },
-    { done: placeList.length > 0, label: "Cadastrar locais e valores do plantão", href: "/locais" },
+    { done: placeList.length > 0, label: "Cadastrar os plantões, códigos e valores", href: "/locais" },
     { done: agenda.length > 0, label: "Conectar a agenda ou cadastrar plantões", href: "/agenda" },
     { done: expenseList.length > 0, label: "Lançar gastos", href: "/gastos" },
   ];

@@ -5,6 +5,7 @@ export type ShiftLocation = {
   name: string;
   defaultRate: number;
   color: string;
+  codes?: string[];
 };
 
 export type Shift = {
@@ -15,6 +16,8 @@ export type Shift = {
   end: string;
   paid: boolean;
   title?: string;
+  where?: string;
+  manualLocation?: boolean;
   calendarId?: string;
   ownerName?: string;
   color?: string;

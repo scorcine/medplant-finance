@@ -34,14 +34,42 @@ function normalize(value: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsTerm(haystack: string, term: string) {
+  const needle = normalize(term).trim().replace(/\s+/g, " ");
+  if (!needle) return false;
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}([^a-z0-9]|$)`).test(haystack);
+}
+
 export function matchLocation(text: string, list: ShiftLocation[]) {
-  const haystack = normalize(text);
-  return list.find((location) => {
-    const name = normalize(location.name);
-    if (haystack.includes(name)) return true;
-    const words = name.split(/\s+/).filter((word) => word.length > 3);
-    return words.length > 0 && words.every((word) => haystack.includes(word));
+  const haystack = normalize(text).replace(/\s+/g, " ");
+  let best: { location: ShiftLocation; size: number } | undefined;
+  for (const location of list) {
+    for (const term of [...(location.codes ?? []), location.name]) {
+      if (containsTerm(haystack, term) && (!best || term.length > best.size)) {
+        best = { location, size: term.length };
+      }
+    }
+  }
+  return best?.location;
+}
+
+export function rematchImportedShifts(list: ShiftLocation[]) {
+  const next = loadImportedShifts().map((shift) => {
+    if (!shift.id.startsWith("gcal-")) return shift;
+    if (shift.manualLocation && list.some((location) => location.id === shift.locationId)) return shift;
+    const location = matchLocation(`${shift.where ?? ""} ${shift.title ?? ""}`, list);
+    return { ...shift, locationId: location?.id ?? "", manualLocation: false };
   });
+  saveImportedShifts(next);
+  return next;
+}
+
+export function countMatches(location: ShiftLocation) {
+  return loadImportedShifts().filter((shift) => shift.locationId === location.id).length;
 }
 
 export function eventsToShifts(
@@ -59,6 +87,7 @@ export function eventsToShifts(
       end: event.end,
       paid: false,
       title: event.title,
+      where: event.location,
       calendarId: owner?.id,
       ownerName: owner?.name,
       color: owner?.color,
@@ -119,12 +148,14 @@ export function saveAgendaUrl(url: string) {
 export function replaceCalendarShifts(calendarId: string, imported: Shift[]) {
   const prefix = `gcal-${calendarId}-`;
   const current = loadImportedShifts();
-  const assigned = new Map(
-    current.filter((shift) => shift.id.startsWith(prefix) && shift.locationId).map((shift) => [shift.id, shift.locationId]),
+  const manual = new Map(
+    current
+      .filter((shift) => shift.id.startsWith(prefix) && shift.manualLocation && shift.locationId)
+      .map((shift) => [shift.id, shift.locationId]),
   );
   const rest = current.filter((shift) => !shift.id.startsWith(prefix));
   const merged = imported.map((shift) =>
-    shift.locationId || !assigned.has(shift.id) ? shift : { ...shift, locationId: assigned.get(shift.id) ?? "" },
+    manual.has(shift.id) ? { ...shift, locationId: manual.get(shift.id) ?? "", manualLocation: true } : shift,
   );
   const next = [...rest, ...merged];
   saveImportedShifts(next);
