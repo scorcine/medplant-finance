@@ -7,8 +7,8 @@ import {
   CreditCard,
   LayoutDashboard,
   MapPin,
+  PieChart,
   Receipt,
-  Stethoscope,
   UserRound,
   Users,
   Wallet,
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/carteira", label: "Carteira", icon: PieChart },
   { href: "/cadastro/pessoas", label: "Cadastro de pessoas", icon: UserRound },
   { href: "/cadastro/familia", label: "Inclusão da família", icon: Users },
   { href: "/plantoes", label: "Plantões", icon: CalendarDays },
@@ -33,11 +34,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] lg:flex">
         <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-6 py-5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-            <Stethoscope className="h-5 w-5" aria-hidden />
+            <PieChart className="h-5 w-5" aria-hidden />
           </div>
           <div>
             <p className="text-sm font-semibold leading-tight">MedPlant</p>
-            <p className="text-xs text-[var(--color-muted)]">Finanças & plantões</p>
+            <p className="text-xs text-[var(--color-muted)]">Finanças e investimentos</p>
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-4">
@@ -64,8 +65,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-elevated)] px-3 py-3">
             <Wallet className="h-4 w-4 text-[var(--color-muted)]" aria-hidden />
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">Dr. Ana Silva</p>
-              <p className="text-xs text-[var(--color-muted)]">Plantonista</p>
+              <p className="truncate text-sm font-medium">Ana Silva</p>
+              <p className="text-xs text-[var(--color-muted)]">Conta pessoal</p>
             </div>
           </div>
         </div>
@@ -74,7 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-background)]/90 px-4 py-3 backdrop-blur-md lg:hidden">
           <div className="flex items-center gap-2">
-            <Stethoscope className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
+            <PieChart className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
             <span className="font-semibold">MedPlant</span>
           </div>
         </header>

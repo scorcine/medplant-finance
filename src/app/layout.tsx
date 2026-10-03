@@ -3,8 +3,8 @@ import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MedPlant — Plantões e finanças",
-  description: "Controle de plantões e finanças pessoais e familiares para médicos",
+  title: "MedPlant — Finanças e investimentos",
+  description: "Organização financeira pessoal e familiar, com análise da carteira de investimentos",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

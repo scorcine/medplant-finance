@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, CalendarCheck, PiggyBank, TrendingUp, UserRound, Users } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarCheck, PieChart, PiggyBank, TrendingUp, UserRound, Users } from "lucide-react";
 import { ScopeToggle } from "@/components/scope-toggle";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -45,7 +45,17 @@ export default function DashboardPage() {
         <ScopeToggle value={scope} onChange={setScope} />
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Link
+          href="/carteira"
+          className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-surface-elevated)]"
+        >
+          <PieChart className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
+          <span>
+            <span className="block font-medium">Carteira de investimentos</span>
+            <span className="block text-sm text-[var(--color-muted)]">Alocação e resultado</span>
+          </span>
+        </Link>
         <Link
           href="/cadastro/pessoas"
           className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-surface-elevated)]"
@@ -53,7 +63,7 @@ export default function DashboardPage() {
           <UserRound className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
           <span>
             <span className="block font-medium">Cadastro de pessoas</span>
-            <span className="block text-sm text-[var(--color-muted)]">Médico e familiares</span>
+            <span className="block text-sm text-[var(--color-muted)]">Titular e familiares</span>
           </span>
         </Link>
         <Link

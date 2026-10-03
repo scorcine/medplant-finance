@@ -1,0 +1,13 @@
+---
+description: Aplicar pedidos no projeto e publicar sem pedir a mesma confirmação de novo
+alwaysApply: true
+---
+
+# Aplicar o que já foi pedido
+
+Quando o usuário pedir uma alteração, implemente na hora no código.
+
+- Não peça para confirmar de novo um pedido já feito.
+- Não substitua a implementação por um passo a passo para o usuário clicar.
+- Depois de alterar a interface ou o comportamento, envie o commit para a branch `main` no GitHub, para o site publicado acompanhar.
+- Só pare numa etapa que somente o usuário consegue concluir, como um login da Vercel, e diga isso em uma frase.

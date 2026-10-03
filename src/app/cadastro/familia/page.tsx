@@ -44,7 +44,7 @@ export default function InclusaoFamiliaPage() {
         ...current,
         membros: [
           ...current.membros,
-          { personId: person.id, parentesco: person.papel === "medico" ? "Titular" : "Cônjuge" },
+          { personId: person.id, parentesco: person.papel === "titular" ? "Titular" : "Cônjuge" },
         ],
       };
     });
@@ -99,7 +99,7 @@ export default function InclusaoFamiliaPage() {
       {people.length === 0 ? (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
           <p className="text-sm text-[var(--color-muted)]">
-            Ainda não há pessoas cadastradas. Cadastre o médico e os familiares antes de montar a família.
+            Ainda não há pessoas cadastradas. Cadastre o titular e os familiares antes de montar a família.
           </p>
           <Link
             href="/cadastro/pessoas"
@@ -162,7 +162,7 @@ export default function InclusaoFamiliaPage() {
                     <span>
                       <span className="block font-medium">{person.nome}</span>
                       <span className="block text-xs text-[var(--color-muted)]">
-                        {person.papel === "medico" ? "Médico" : "Familiar"}
+                        {person.papel === "familiar" ? "Familiar" : "Titular"}
                         {person.email ? ` · ${person.email}` : ""}
                       </span>
                     </span>

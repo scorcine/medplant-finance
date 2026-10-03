@@ -1,4 +1,4 @@
-export type PersonRole = "medico" | "familiar";
+export type PersonRole = "titular" | "familiar";
 
 export type Person = {
   id: string;
@@ -6,9 +6,6 @@ export type Person = {
   email: string;
   telefone: string;
   papel: PersonRole;
-  crm: string;
-  uf: string;
-  especialidade: string;
 };
 
 export type FamilyMember = {
@@ -30,8 +27,17 @@ export function loadPeople(): Person[] {
   const raw = localStorage.getItem(PEOPLE_KEY);
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as Person[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as Array<Partial<Person> & { papel?: string }>;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((person) => person.id && person.nome)
+      .map((person) => ({
+        id: person.id as string,
+        nome: person.nome as string,
+        email: person.email ?? "",
+        telefone: person.telefone ?? "",
+        papel: person.papel === "familiar" ? "familiar" : "titular",
+      }));
   } catch {
     return [];
   }

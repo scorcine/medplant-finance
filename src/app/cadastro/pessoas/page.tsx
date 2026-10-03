@@ -6,31 +6,11 @@ import { Trash2, UserRound } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { loadPeople, savePeople, type Person, type PersonRole } from "@/lib/people";
 
-const UFS = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
-  "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
-];
-
-const ESPECIALIDADES = [
-  "Clínica médica",
-  "Pediatria",
-  "Cirurgia geral",
-  "Ginecologia e obstetrícia",
-  "Ortopedia",
-  "Cardiologia",
-  "Anestesiologia",
-  "Medicina de emergência",
-  "Outra",
-];
-
 const blank = (): Omit<Person, "id"> => ({
   nome: "",
   email: "",
   telefone: "",
-  papel: "medico",
-  crm: "",
-  uf: "SP",
-  especialidade: "Clínica médica",
+  papel: "titular",
 });
 
 export default function CadastroPessoasPage() {
@@ -50,10 +30,6 @@ export default function CadastroPessoasPage() {
     event.preventDefault();
     if (!form.nome.trim()) {
       setError("Informe o nome da pessoa.");
-      return;
-    }
-    if (form.papel === "medico" && !form.crm.trim()) {
-      setError("Informe o CRM do médico.");
       return;
     }
     setError("");
@@ -78,7 +54,7 @@ export default function CadastroPessoasPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Cadastro de pessoas</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            Cadastre o médico e os demais. Depois, na inclusão da família, você escolhe quem entra no grupo.
+            Cadastre quem participa das finanças. Depois, na inclusão da família, escolha quem entra no grupo.
           </p>
         </div>
       </header>
@@ -117,43 +93,10 @@ export default function CadastroPessoasPage() {
               value={form.papel}
               onChange={(e) => update("papel", e.target.value as PersonRole)}
             >
-              <option value="medico">Médico</option>
+              <option value="titular">Titular</option>
               <option value="familiar">Familiar</option>
             </SelectInput>
           </Field>
-          {form.papel === "medico" ? (
-            <>
-              <Field label="CRM">
-                <TextInput
-                  value={form.crm}
-                  onChange={(e) => update("crm", e.target.value)}
-                  placeholder="123456"
-                  required
-                />
-              </Field>
-              <Field label="UF do CRM">
-                <SelectInput value={form.uf} onChange={(e) => update("uf", e.target.value)}>
-                  {UFS.map((uf) => (
-                    <option key={uf} value={uf}>
-                      {uf}
-                    </option>
-                  ))}
-                </SelectInput>
-              </Field>
-              <Field label="Especialidade" className="sm:col-span-2">
-                <SelectInput
-                  value={form.especialidade}
-                  onChange={(e) => update("especialidade", e.target.value)}
-                >
-                  {ESPECIALIDADES.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </SelectInput>
-              </Field>
-            </>
-          ) : null}
         </div>
 
         {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
@@ -182,9 +125,7 @@ export default function CadastroPessoasPage() {
                 <div className="min-w-0">
                   <p className="font-medium">{person.nome}</p>
                   <p className="text-xs text-[var(--color-muted)]">
-                    {person.papel === "medico"
-                      ? `Médico · CRM ${person.crm}/${person.uf}`
-                      : "Familiar"}
+                    {person.papel === "familiar" ? "Familiar" : "Titular"}
                     {person.email ? ` · ${person.email}` : ""}
                   </p>
                 </div>
