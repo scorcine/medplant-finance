@@ -24,6 +24,17 @@ export async function POST(request: Request) {
   }
 
   const response = await fetch(url.toString(), { cache: "no-store", redirect: "follow" });
+  if (response.status === 404 || response.status === 403 || response.status === 401) {
+    return Response.json(
+      {
+        error: url.pathname.includes("/public/")
+          ? "Essa agenda é particular. Cole o endereço secreto iCal dela."
+          : "O endereço secreto não foi aceito pelo Google. Copie de novo o endereço secreto iCal.",
+        code: "particular",
+      },
+      { status: 403 },
+    );
+  }
   if (!response.ok) {
     return Response.json({ error: "Não foi possível ler essa agenda." }, { status: 502 });
   }

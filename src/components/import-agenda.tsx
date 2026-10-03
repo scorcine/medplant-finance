@@ -23,6 +23,7 @@ export function ImportAgenda({ onImported }: Props) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loadingId, setLoadingId] = useState("");
+  const [privateId, setPrivateId] = useState("");
 
   useEffect(() => {
     setCalendars(loadCalendars());
@@ -46,18 +47,21 @@ export function ImportAgenda({ onImported }: Props) {
     setLoadingId(calendar.id);
     setError("");
     setMessage("");
+    setPrivateId("");
     try {
       const response = await fetch("/api/agenda", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      const data = (await response.json()) as { ics?: string; error?: string };
+      const data = (await response.json()) as { ics?: string; error?: string; code?: string };
       if (!response.ok || !data.ics) {
-        setError(
-          data.error ??
-            `Não foi possível ler a agenda de ${calendar.email}. Se ela for particular, cole o endereço secreto iCal dessa conta.`,
-        );
+        if (data.code === "particular") {
+          setPrivateId(calendar.id);
+          setError(`${calendar.name}: ${data.error}`);
+        } else {
+          setError(`${calendar.name}: ${data.error ?? "não foi possível ler a agenda."}`);
+        }
         return;
       }
       apply(calendar, data.ics);
@@ -102,7 +106,7 @@ export function ImportAgenda({ onImported }: Props) {
               <p className="text-sm text-[var(--color-muted)]">{calendar.email}</p>
             </div>
             <label className="mt-3 block text-xs text-[var(--color-muted)]" htmlFor={`secret-${calendar.id}`}>
-              Endereço secreto iCal, se a agenda for particular
+              Endereço secreto iCal da agenda de {calendar.name}
             </label>
             <input
               id={`secret-${calendar.id}`}
@@ -112,7 +116,7 @@ export function ImportAgenda({ onImported }: Props) {
                 saveSecretUrl(calendar.id, url);
                 setCalendars(loadCalendars());
               }}
-              placeholder={icalUrlFromEmail(calendar.email)}
+              placeholder="Cole aqui o endereço que termina em basic.ics"
               className="mt-1 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
             />
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -138,6 +142,32 @@ export function ImportAgenda({ onImported }: Props) {
                 />
               </label>
             </div>
+            {privateId === calendar.id ? (
+              <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
+                <p className="font-semibold">Como pegar o endereço secreto de {calendar.name}</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-[var(--color-muted)]">
+                  <li>
+                    No computador, abra as{" "}
+                    <a
+                      href="https://calendar.google.com/calendar/r/settings"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[var(--color-accent)] hover:underline"
+                    >
+                      configurações do Google Agenda
+                    </a>{" "}
+                    entrando com {calendar.email}.
+                  </li>
+                  <li>Na coluna da esquerda, em “Configurações das minhas agendas”, clique em {calendar.name}.</li>
+                  <li>Desça até “Integrar agenda” e copie o “Endereço secreto no formato iCal”.</li>
+                  <li>Cole no campo acima e clique em “Puxar agenda”.</li>
+                </ol>
+                <p className="mt-2 text-xs text-[var(--color-muted)]">
+                  O endereço secreto só aparece para o dono da agenda. A agenda de outra pessoa precisa ser copiada na
+                  conta dela e enviada para você colar aqui.
+                </p>
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>
