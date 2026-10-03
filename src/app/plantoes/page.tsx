@@ -6,7 +6,7 @@ import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { ImportAgenda } from "@/components/import-agenda";
 import { locations as sampleLocations, type Shift, type ShiftLocation } from "@/lib/mock-data";
 import { loadLocations } from "@/lib/records";
-import { addShift, loadImportedShifts, mergeShifts, saveImportedShifts } from "@/lib/shifts-store";
+import { addShift, loadCalendars, loadImportedShifts, mergeShifts, saveImportedShifts, type AgendaCalendar } from "@/lib/shifts-store";
 import { cn, formatBRL } from "@/lib/utils";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -37,6 +37,7 @@ export default function PlantoesPage() {
   });
   const [agenda, setAgenda] = useState<Shift[]>([]);
   const [places, setPlaces] = useState<ShiftLocation[]>(sampleLocations);
+  const [calendars, setCalendars] = useState<AgendaCalendar[]>([]);
   const [draft, setDraft] = useState({ date: today, start: "19:00", end: "07:00", locationId: "" });
   const [notice, setNotice] = useState("");
 
@@ -44,6 +45,7 @@ export default function PlantoesPage() {
     const loadedPlaces = loadLocations();
     setPlaces(loadedPlaces);
     setDraft((current) => ({ ...current, locationId: current.locationId || loadedPlaces[0]?.id || "" }));
+    setCalendars(loadCalendars());
     setAgenda(mergeShifts(loadImportedShifts()));
   }, []);
 
@@ -88,7 +90,12 @@ export default function PlantoesPage() {
         </p>
       </header>
 
-      <ImportAgenda onImported={(imported) => setAgenda(mergeShifts(imported))} />
+      <ImportAgenda
+        onImported={(imported) => {
+          setCalendars(loadCalendars());
+          setAgenda(mergeShifts(imported));
+        }}
+      />
 
       <form
         onSubmit={(event) => {
@@ -186,8 +193,8 @@ export default function PlantoesPage() {
                         <div
                           key={shift.id}
                           className="truncate rounded px-1 py-0.5 text-[10px] font-medium text-white"
-                          style={{ backgroundColor: location?.color ?? "#64748b" }}
-                          title={`${location?.name ?? shift.title ?? "Plantão"} · ${formatBRL(location?.defaultRate ?? 0)}`}
+                          style={{ backgroundColor: shift.color ?? location?.color ?? "#64748b" }}
+                          title={`${shift.ownerName ? `${shift.ownerName} · ` : ""}${location?.name ?? shift.title ?? "Plantão"} · ${formatBRL(location?.defaultRate ?? 0)}`}
                         >
                           {location?.name.split(" ")[0] ?? "Agenda"}
                         </div>
@@ -213,8 +220,14 @@ export default function PlantoesPage() {
                     <li key={shift.id} className="rounded-xl bg-[var(--color-surface-elevated)] p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-sm font-medium">{location?.name ?? shift.title ?? "Plantão da agenda"}</p>
+                          <p className="flex items-center gap-2 text-sm font-medium">
+                            {shift.color ? (
+                              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: shift.color }} aria-hidden />
+                            ) : null}
+                            {location?.name ?? shift.title ?? "Plantão da agenda"}
+                          </p>
                           <p className="text-xs text-[var(--color-muted)]">
+                            {shift.ownerName ? `${shift.ownerName} · ` : ""}
                             {new Date(shift.date + "T12:00:00").toLocaleDateString("pt-BR")} · {shift.start}–{shift.end}
                           </p>
                         </div>
@@ -255,7 +268,28 @@ export default function PlantoesPage() {
           </div>
 
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-            <h2 className="font-semibold">Legenda</h2>
+            <h2 className="font-semibold">Valores por pessoa</h2>
+            <ul className="mt-3 space-y-2">
+              {calendars.map((calendar) => {
+                const monthPrefix = `${cursor.year}-${String(cursor.month + 1).padStart(2, "0")}`;
+                const total = agenda
+                  .filter((shift) => shift.calendarId === calendar.id && shift.date.startsWith(monthPrefix))
+                  .reduce((sum, shift) => sum + (placeOf(shift.locationId)?.defaultRate ?? 0), 0);
+                return (
+                  <li key={calendar.id} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: calendar.color }} />
+                      {calendar.name}
+                    </span>
+                    <span className="font-medium">{formatBRL(total)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+            <h2 className="font-semibold">Locais</h2>
             <ul className="mt-3 space-y-2">
               {places.map((location) => (
                 <li key={location.id} className="flex items-center justify-between text-sm">

@@ -3,6 +3,19 @@ import { parseIcs, type AgendaEvent } from "@/lib/ics";
 
 const IMPORTED_KEY = "medplant-agenda-shifts";
 const URL_KEY = "medplant-agenda-url";
+const CALENDARS_KEY = "medplant-calendarios";
+
+export type AgendaCalendar = {
+  id: string;
+  name: string;
+  color: string;
+  url: string;
+};
+
+const DEFAULT_CALENDARS: AgendaCalendar[] = [
+  { id: "eu", name: "Meu calendário", color: "#7c3aed", url: "" },
+  { id: "esposa", name: "Esposa", color: "#f97316", url: "" },
+];
 
 function normalize(value: string) {
   return value
@@ -21,19 +34,49 @@ export function matchLocation(text: string, list: ShiftLocation[] = locations) {
   });
 }
 
-export function eventsToShifts(events: AgendaEvent[], list: ShiftLocation[] = locations): Shift[] {
+export function eventsToShifts(
+  events: AgendaEvent[],
+  list: ShiftLocation[] = locations,
+  owner?: Pick<AgendaCalendar, "id" | "name" | "color">,
+): Shift[] {
   return events.map((event) => {
     const location = matchLocation(`${event.location} ${event.title}`, list);
     return {
-      id: `gcal-${event.uid}`,
+      id: owner ? `gcal-${owner.id}-${event.uid}` : `gcal-${event.uid}`,
       date: event.date,
       locationId: location?.id ?? "",
       start: event.start,
       end: event.end,
       paid: false,
       title: event.title,
+      calendarId: owner?.id,
+      ownerName: owner?.name,
+      color: owner?.color,
     };
   });
+}
+
+export function loadCalendars(): AgendaCalendar[] {
+  if (typeof window === "undefined") return DEFAULT_CALENDARS;
+  const raw = localStorage.getItem(CALENDARS_KEY);
+  const savedUrl = localStorage.getItem(URL_KEY) ?? "";
+  if (!raw) {
+    const initial = DEFAULT_CALENDARS.map((calendar) =>
+      calendar.id === "eu" && savedUrl ? { ...calendar, url: savedUrl } : calendar,
+    );
+    localStorage.setItem(CALENDARS_KEY, JSON.stringify(initial));
+    return initial;
+  }
+  try {
+    const parsed = JSON.parse(raw) as AgendaCalendar[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_CALENDARS;
+  } catch {
+    return DEFAULT_CALENDARS;
+  }
+}
+
+export function saveCalendars(list: AgendaCalendar[]) {
+  localStorage.setItem(CALENDARS_KEY, JSON.stringify(list));
 }
 
 export function loadImportedShifts(): Shift[] {
@@ -61,6 +104,14 @@ export function saveAgendaUrl(url: string) {
   localStorage.setItem(URL_KEY, url);
 }
 
+export function replaceCalendarShifts(calendarId: string, imported: Shift[]) {
+  const prefix = `gcal-${calendarId}-`;
+  const rest = loadImportedShifts().filter((shift) => !shift.id.startsWith(prefix));
+  const next = [...rest, ...imported];
+  saveImportedShifts(next);
+  return next;
+}
+
 export function keepManualAndReplaceImported(imported: Shift[]) {
   const manual = loadImportedShifts().filter((shift) => !shift.id.startsWith("gcal-"));
   const next = [...manual, ...imported];
@@ -81,6 +132,10 @@ export function mergeShifts(imported: Shift[]) {
   );
 }
 
-export function shiftsFromIcs(ics: string, list?: ShiftLocation[]) {
-  return eventsToShifts(parseIcs(ics), list);
+export function shiftsFromIcs(
+  ics: string,
+  list?: ShiftLocation[],
+  owner?: Pick<AgendaCalendar, "id" | "name" | "color">,
+) {
+  return eventsToShifts(parseIcs(ics), list, owner);
 }

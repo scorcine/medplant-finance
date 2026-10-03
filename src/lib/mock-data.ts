@@ -15,6 +15,9 @@ export type Shift = {
   end: string;
   paid: boolean;
   title?: string;
+  calendarId?: string;
+  ownerName?: string;
+  color?: string;
 };
 
 export type Expense = {
