@@ -118,8 +118,15 @@ export function saveAgendaUrl(url: string) {
 
 export function replaceCalendarShifts(calendarId: string, imported: Shift[]) {
   const prefix = `gcal-${calendarId}-`;
-  const rest = loadImportedShifts().filter((shift) => !shift.id.startsWith(prefix));
-  const next = [...rest, ...imported];
+  const current = loadImportedShifts();
+  const assigned = new Map(
+    current.filter((shift) => shift.id.startsWith(prefix) && shift.locationId).map((shift) => [shift.id, shift.locationId]),
+  );
+  const rest = current.filter((shift) => !shift.id.startsWith(prefix));
+  const merged = imported.map((shift) =>
+    shift.locationId || !assigned.has(shift.id) ? shift : { ...shift, locationId: assigned.get(shift.id) ?? "" },
+  );
+  const next = [...rest, ...merged];
   saveImportedShifts(next);
   return next;
 }

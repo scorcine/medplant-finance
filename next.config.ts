@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/cadastro/individual", destination: "/cadastro/pessoas", permanent: false },
       { source: "/cadastro/familiar", destination: "/cadastro/familia", permanent: false },
+      { source: "/plantoes", destination: "/agenda", permanent: false },
     ];
   },
 };

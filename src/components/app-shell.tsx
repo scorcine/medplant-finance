@@ -23,7 +23,7 @@ const nav = [
   { href: "/carteira", label: "Carteira", icon: PieChart },
   { href: "/cadastro/pessoas", label: "Meus dados e pessoas", icon: UserRound },
   { href: "/cadastro/familia", label: "Inclusão da família", icon: Users },
-  { href: "/plantoes", label: "Plantões", icon: CalendarDays },
+  { href: "/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/locais", label: "Locais", icon: MapPin },
   { href: "/gastos", label: "Gastos", icon: Receipt },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -38,7 +38,9 @@ export default function DashboardPage() {
   }, []);
 
   const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date());
-  const monthShifts = agenda.filter((shift) => shift.date.startsWith(month));
+  const monthShifts = agenda.filter(
+    (shift) => shift.date.startsWith(month) && placeList.some((place) => place.id === shift.locationId),
+  );
   const shiftIncome = monthShifts.reduce(
     (sum, shift) => sum + (placeList.find((place) => place.id === shift.locationId)?.defaultRate ?? 0),
     0,
@@ -69,7 +71,7 @@ export default function DashboardPage() {
     { done: Boolean(owner), label: "Fazer meu cadastro", href: "/cadastro/pessoas" },
     { done: hasFamily, label: "Ligar as pessoas da família", href: "/cadastro/familia" },
     { done: placeList.length > 0, label: "Cadastrar locais e valores do plantão", href: "/locais" },
-    { done: agenda.length > 0, label: "Cadastrar ou puxar plantões", href: "/plantoes" },
+    { done: agenda.length > 0, label: "Conectar a agenda ou cadastrar plantões", href: "/agenda" },
     { done: expenseList.length > 0, label: "Lançar gastos", href: "/gastos" },
   ];
   const pending = steps.filter((step) => !step.done).length;
@@ -123,7 +125,7 @@ export default function DashboardPage() {
 
       {memberCalendars.length > 0 ? (
         <Link
-          href="/plantoes"
+          href="/agenda"
           className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 hover:bg-[var(--color-surface-elevated)]"
         >
           <p className="font-semibold">Calendário da família</p>
@@ -145,7 +147,7 @@ export default function DashboardPage() {
           {byLocation.length === 0 ? (
             <p className="mt-3 text-sm text-[var(--color-muted)]">
               Nenhum plantão neste mês.{" "}
-              <Link href="/plantoes" className="text-[var(--color-accent)] hover:underline">
+              <Link href="/agenda" className="text-[var(--color-accent)] hover:underline">
                 Cadastrar plantão
               </Link>
             </p>
