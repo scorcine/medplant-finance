@@ -21,9 +21,9 @@ export function matchLocation(text: string, list: ShiftLocation[] = locations) {
   });
 }
 
-export function eventsToShifts(events: AgendaEvent[]): Shift[] {
+export function eventsToShifts(events: AgendaEvent[], list: ShiftLocation[] = locations): Shift[] {
   return events.map((event) => {
-    const location = matchLocation(`${event.location} ${event.title}`);
+    const location = matchLocation(`${event.location} ${event.title}`, list);
     return {
       id: `gcal-${event.uid}`,
       date: event.date,
@@ -61,6 +61,19 @@ export function saveAgendaUrl(url: string) {
   localStorage.setItem(URL_KEY, url);
 }
 
+export function keepManualAndReplaceImported(imported: Shift[]) {
+  const manual = loadImportedShifts().filter((shift) => !shift.id.startsWith("gcal-"));
+  const next = [...manual, ...imported];
+  saveImportedShifts(next);
+  return next;
+}
+
+export function addShift(shift: Shift) {
+  const next = [...loadImportedShifts(), shift];
+  saveImportedShifts(next);
+  return next;
+}
+
 export function mergeShifts(imported: Shift[]) {
   const importedIds = new Set(imported.map((shift) => shift.id));
   return [...sampleShifts.filter((shift) => !importedIds.has(shift.id)), ...imported].sort((a, b) =>
@@ -68,6 +81,6 @@ export function mergeShifts(imported: Shift[]) {
   );
 }
 
-export function shiftsFromIcs(ics: string) {
-  return eventsToShifts(parseIcs(ics));
+export function shiftsFromIcs(ics: string, list?: ShiftLocation[]) {
+  return eventsToShifts(parseIcs(ics), list);
 }

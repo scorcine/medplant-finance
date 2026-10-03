@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { CalendarArrowDown } from "lucide-react";
-import { loadAgendaUrl, saveAgendaUrl, saveImportedShifts, shiftsFromIcs } from "@/lib/shifts-store";
+import { loadLocations } from "@/lib/records";
+import { keepManualAndReplaceImported, loadAgendaUrl, saveAgendaUrl, shiftsFromIcs } from "@/lib/shifts-store";
 import type { Shift } from "@/lib/mock-data";
 
 type Props = {
@@ -20,14 +21,14 @@ export function ImportAgenda({ onImported }: Props) {
   }, []);
 
   function apply(ics: string) {
-    const imported = shiftsFromIcs(ics);
+    const imported = shiftsFromIcs(ics, loadLocations());
     if (imported.length === 0) {
       setError("Nenhum compromisso encontrado nessa agenda.");
       setMessage("");
       return;
     }
-    saveImportedShifts(imported);
-    onImported(imported);
+    const saved = keepManualAndReplaceImported(imported);
+    onImported(saved);
     const matched = imported.filter((shift) => shift.locationId).length;
     setError("");
     setMessage(

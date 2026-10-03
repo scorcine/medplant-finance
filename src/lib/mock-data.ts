@@ -94,8 +94,8 @@ export function monthShiftIncome(monthPrefix: string, list: Shift[] = shifts): n
     .reduce((sum, s) => sum + shiftAmount(s), 0);
 }
 
-export function monthExpenses(monthPrefix: string, scope: ViewScope): number {
-  return expenses
+export function monthExpenses(monthPrefix: string, scope: ViewScope, list: Expense[] = expenses): number {
+  return list
     .filter((e) => e.date.startsWith(monthPrefix))
     .filter((e) => scope === "consolidado" || e.scope === scope || scope === "familia" && e.scope === "familia")
     .filter((e) => {

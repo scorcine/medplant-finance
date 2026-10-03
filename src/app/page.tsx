@@ -2,19 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, CalendarCheck, PieChart, PiggyBank, TrendingUp, UserRound, Users } from "lucide-react";
+import { ArrowDownRight, CalendarCheck, PieChart, PiggyBank, TrendingUp, UserRound, Users } from "lucide-react";
 import { ScopeToggle } from "@/components/scope-toggle";
 import { StatCard } from "@/components/stat-card";
 import {
   expenses,
   locations,
   monthExpenses,
-  monthShiftIncome,
   shifts,
-  shiftAmount,
+  type Expense,
   type Shift,
+  type ShiftLocation,
   type ViewScope,
 } from "@/lib/mock-data";
+import { loadExpenses, loadLocations } from "@/lib/records";
 import { loadImportedShifts, mergeShifts } from "@/lib/shifts-store";
 import { formatBRL } from "@/lib/utils";
 
@@ -23,24 +24,34 @@ const MONTH = "2026-10";
 export default function DashboardPage() {
   const [scope, setScope] = useState<ViewScope>("consolidado");
   const [agenda, setAgenda] = useState<Shift[]>(shifts);
+  const [placeList, setPlaceList] = useState<ShiftLocation[]>(locations);
+  const [expenseList, setExpenseList] = useState<Expense[]>(expenses);
 
   useEffect(() => {
     setAgenda(mergeShifts(loadImportedShifts()));
+    setPlaceList(loadLocations());
+    setExpenseList(loadExpenses());
   }, []);
 
-  const shiftIncome = monthShiftIncome(MONTH, agenda);
-  const spent = monthExpenses(MONTH, scope);
+  const shiftIncome = agenda
+    .filter((shift) => shift.date.startsWith(MONTH))
+    .reduce((sum, shift) => sum + (placeList.find((place) => place.id === shift.locationId)?.defaultRate ?? 0), 0);
+  const spent = monthExpenses(MONTH, scope, expenseList);
   const balance = shiftIncome - spent;
 
   const byLocation = useMemo(() => {
-    return locations.map((loc) => {
-      const locShifts = agenda.filter((s) => s.date.startsWith(MONTH) && s.locationId === loc.id);
-      const total = locShifts.reduce((sum, s) => sum + shiftAmount(s), 0);
+    return placeList.map((loc) => {
+      const locShifts = agenda.filter((shift) => shift.date.startsWith(MONTH) && shift.locationId === loc.id);
+      const total = locShifts.length * loc.defaultRate;
       return { loc, count: locShifts.length, total };
     });
-  }, [agenda]);
+  }, [agenda, placeList]);
 
-  const recentExpenses = expenses.slice(0, 4);
+  const recentExpenses = expenseList.filter((expense) => {
+    if (scope === "pessoal") return expense.scope === "pessoal";
+    if (scope === "familia") return expense.scope === "familia";
+    return true;
+  });
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -158,13 +169,7 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold">Últimos gastos</h2>
           <p className="mt-1 text-sm text-[var(--color-muted)]">Filtrados pela visão selecionada</p>
           <ul className="mt-5 divide-y divide-[var(--color-border)]">
-            {recentExpenses
-              .filter((e) => {
-                if (scope === "pessoal") return e.scope === "pessoal";
-                if (scope === "familia") return e.scope === "familia";
-                return true;
-              })
-              .map((e) => (
+            {recentExpenses.map((e) => (
                 <li key={e.id} className="flex items-center justify-between gap-3 py-3 first:pt-0">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{e.description}</p>
@@ -181,18 +186,6 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <section className="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/50 p-5">
-        <div className="flex items-start gap-3">
-          <ArrowUpRight className="mt-0.5 h-5 w-5 text-[var(--color-accent)]" aria-hidden />
-          <div>
-            <h2 className="font-semibold">Próximo passo</h2>
-            <p className="mt-1 text-sm text-[var(--color-muted)]">
-              Esta interface usa dados de demonstração. Depois conectamos banco de dados e login para
-              persistir plantões, locais e gastos na nuvem (Vercel + Supabase ou similar).
-            </p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

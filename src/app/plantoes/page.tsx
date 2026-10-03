@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { ImportAgenda } from "@/components/import-agenda";
-import { getLocation, locations, shiftAmount, type Shift } from "@/lib/mock-data";
-import { loadImportedShifts, mergeShifts, saveImportedShifts } from "@/lib/shifts-store";
+import { locations as sampleLocations, type Shift, type ShiftLocation } from "@/lib/mock-data";
+import { loadLocations } from "@/lib/records";
+import { addShift, loadImportedShifts, mergeShifts, saveImportedShifts } from "@/lib/shifts-store";
 import { cn, formatBRL } from "@/lib/utils";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -34,10 +36,20 @@ export default function PlantoesPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [agenda, setAgenda] = useState<Shift[]>([]);
+  const [places, setPlaces] = useState<ShiftLocation[]>(sampleLocations);
+  const [draft, setDraft] = useState({ date: today, start: "19:00", end: "07:00", locationId: "" });
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    const loadedPlaces = loadLocations();
+    setPlaces(loadedPlaces);
+    setDraft((current) => ({ ...current, locationId: current.locationId || loadedPlaces[0]?.id || "" }));
     setAgenda(mergeShifts(loadImportedShifts()));
   }, []);
+
+  function placeOf(id: string) {
+    return places.find((place) => place.id === id);
+  }
 
   const grid = useMemo(
     () => buildMonthGrid(cursor.year, cursor.month),
@@ -77,6 +89,53 @@ export default function PlantoesPage() {
       </header>
 
       <ImportAgenda onImported={(imported) => setAgenda(mergeShifts(imported))} />
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!draft.locationId) return;
+          const saved = addShift({
+            id: `manual-${crypto.randomUUID()}`,
+            date: draft.date,
+            start: draft.start,
+            end: draft.end,
+            locationId: draft.locationId,
+            paid: false,
+          });
+          setAgenda(mergeShifts(saved));
+          const place = placeOf(draft.locationId);
+          setNotice(place ? `Plantão salvo com ${formatBRL(place.defaultRate)}.` : "Plantão salvo.");
+        }}
+        className="grid gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 md:grid-cols-4"
+      >
+        <Field label="Data">
+          <TextInput type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} required />
+        </Field>
+        <Field label="Início">
+          <TextInput type="time" value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} required />
+        </Field>
+        <Field label="Fim">
+          <TextInput type="time" value={draft.end} onChange={(event) => setDraft({ ...draft, end: event.target.value })} required />
+        </Field>
+        <Field label="Local">
+          <SelectInput value={draft.locationId} onChange={(event) => setDraft({ ...draft, locationId: event.target.value })}>
+            {places.map((place) => (
+              <option key={place.id} value={place.id}>
+                {place.name} · {formatBRL(place.defaultRate)}
+              </option>
+            ))}
+          </SelectInput>
+        </Field>
+        <div className="md:col-span-4 flex flex-wrap items-center gap-3">
+          <button type="submit" className="rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white">
+            Cadastrar plantão
+          </button>
+          <p className="text-sm text-[var(--color-muted)]">
+            Valor automático: {formatBRL(placeOf(draft.locationId)?.defaultRate ?? 0)}
+          </p>
+          {notice ? <p className="text-sm text-[var(--color-success)]">{notice}</p> : null}
+        </div>
+      </form>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 md:p-5">
@@ -122,13 +181,13 @@ export default function PlantoesPage() {
                   <span className={cn("text-xs font-medium", key === today && "text-[var(--color-accent)]")}>{day}</span>
                   <div className="mt-1 space-y-0.5">
                     {dayShifts.map((shift) => {
-                      const location = getLocation(shift.locationId);
+                      const location = placeOf(shift.locationId);
                       return (
                         <div
                           key={shift.id}
                           className="truncate rounded px-1 py-0.5 text-[10px] font-medium text-white"
                           style={{ backgroundColor: location?.color ?? "#64748b" }}
-                          title={`${location?.name ?? shift.title ?? "Plantão"} · ${formatBRL(shiftAmount(shift))}`}
+                          title={`${location?.name ?? shift.title ?? "Plantão"} · ${formatBRL(location?.defaultRate ?? 0)}`}
                         >
                           {location?.name.split(" ")[0] ?? "Agenda"}
                         </div>
@@ -149,7 +208,7 @@ export default function PlantoesPage() {
                 <li className="text-sm text-[var(--color-muted)]">Nenhum plantão a partir de hoje.</li>
               ) : (
                 upcoming.map((shift) => {
-                  const location = getLocation(shift.locationId);
+                  const location = placeOf(shift.locationId);
                   return (
                     <li key={shift.id} className="rounded-xl bg-[var(--color-surface-elevated)] p-3">
                       <div className="flex items-start justify-between gap-2">
@@ -160,7 +219,7 @@ export default function PlantoesPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-semibold">{formatBRL(shiftAmount(shift))}</p>
+                          <p className="text-sm font-semibold">{formatBRL(location?.defaultRate ?? 0)}</p>
                           <p
                             className={cn(
                               "text-[10px] font-medium uppercase tracking-wide",
@@ -180,7 +239,7 @@ export default function PlantoesPage() {
                             onChange={(event) => assignLocation(shift.id, event.target.value)}
                           >
                             <option value="">Escolher local</option>
-                            {locations.map((item) => (
+                            {places.map((item) => (
                               <option key={item.id} value={item.id}>
                                 {item.name} · {formatBRL(item.defaultRate)}
                               </option>
@@ -198,7 +257,7 @@ export default function PlantoesPage() {
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <h2 className="font-semibold">Legenda</h2>
             <ul className="mt-3 space-y-2">
-              {locations.map((location) => (
+              {places.map((location) => (
                 <li key={location.id} className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: location.color }} />
