@@ -38,6 +38,7 @@ export default function PlantoesPage() {
   const [agenda, setAgenda] = useState<Shift[]>([]);
   const [places, setPlaces] = useState<ShiftLocation[]>(sampleLocations);
   const [calendars, setCalendars] = useState<AgendaCalendar[]>([]);
+  const [focus, setFocus] = useState("juntos");
   const [draft, setDraft] = useState({ date: today, start: "19:00", end: "07:00", locationId: "" });
   const [notice, setNotice] = useState("");
 
@@ -79,7 +80,8 @@ export default function PlantoesPage() {
     setAgenda(mergeShifts(imported));
   }
 
-  const upcoming = agenda.filter((shift) => shift.date >= today).slice(0, 6);
+  const visible = focus === "juntos" ? agenda : agenda.filter((shift) => shift.calendarId === focus);
+  const upcoming = visible.filter((shift) => shift.date >= today).slice(0, 6);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -89,6 +91,34 @@ export default function PlantoesPage() {
           O valor entra pelo local. Importe a agenda do Chrome para puxar os plantões cadastrados lá.
         </p>
       </header>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setFocus("juntos")}
+          className={cn(
+            "rounded-xl px-4 py-2 text-sm font-medium",
+            focus === "juntos" ? "bg-[var(--color-accent)] text-white" : "border border-[var(--color-border)] text-[var(--color-muted)]",
+          )}
+        >
+          Juntos
+        </button>
+        {calendars.map((calendar) => (
+          <button
+            key={calendar.id}
+            type="button"
+            onClick={() => setFocus(calendar.id)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium",
+              focus === calendar.id ? "text-white" : "border border-[var(--color-border)] text-[var(--color-muted)]",
+            )}
+            style={focus === calendar.id ? { backgroundColor: calendar.color } : undefined}
+          >
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: calendar.color }} aria-hidden />
+            {calendar.name}
+          </button>
+        ))}
+      </div>
 
       <ImportAgenda
         onImported={(imported) => {
@@ -176,7 +206,7 @@ export default function PlantoesPage() {
             {grid.map((day, index) => {
               if (day === null) return <div key={`empty-${index}`} className="min-h-[4.5rem] rounded-xl" />;
               const key = dateKey(day);
-              const dayShifts = agenda.filter((shift) => shift.date === key);
+              const dayShifts = visible.filter((shift) => shift.date === key);
               return (
                 <div
                   key={key}

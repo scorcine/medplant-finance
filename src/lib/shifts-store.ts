@@ -1,21 +1,30 @@
 import { locations, shifts as sampleShifts, type Shift, type ShiftLocation } from "@/lib/mock-data";
 import { parseIcs, type AgendaEvent } from "@/lib/ics";
+import { loadFamily, loadPeople, type Person } from "@/lib/people";
 
 const IMPORTED_KEY = "medplant-agenda-shifts";
 const URL_KEY = "medplant-agenda-url";
-const CALENDARS_KEY = "medplant-calendarios";
 
 export type AgendaCalendar = {
   id: string;
   name: string;
+  email: string;
   color: string;
   url: string;
 };
 
-const DEFAULT_CALENDARS: AgendaCalendar[] = [
-  { id: "eu", name: "Meu calendário", color: "#7c3aed", url: "" },
-  { id: "esposa", name: "Esposa", color: "#f97316", url: "" },
-];
+export const MEMBER_COLORS = ["#7c3aed", "#f97316", "#3b9eff", "#34d399", "#f43f5e"];
+const SECRETS_KEY = "medplant-calendar-secret";
+
+export function icalUrlFromEmail(email: string) {
+  return `https://calendar.google.com/calendar/ical/${encodeURIComponent(email.trim().toLowerCase())}/public/basic.ics`;
+}
+
+function memberLabel(person: Person, members: Person[]) {
+  const titulares = members.filter((item) => item.papel === "titular");
+  if (person.papel === "titular" && titulares.length === 1) return "Meu";
+  return person.nome.trim().split(/\s+/)[0] || person.nome;
+}
 
 function normalize(value: string) {
   return value
@@ -56,27 +65,37 @@ export function eventsToShifts(
   });
 }
 
-export function loadCalendars(): AgendaCalendar[] {
-  if (typeof window === "undefined") return DEFAULT_CALENDARS;
-  const raw = localStorage.getItem(CALENDARS_KEY);
-  const savedUrl = localStorage.getItem(URL_KEY) ?? "";
-  if (!raw) {
-    const initial = DEFAULT_CALENDARS.map((calendar) =>
-      calendar.id === "eu" && savedUrl ? { ...calendar, url: savedUrl } : calendar,
-    );
-    localStorage.setItem(CALENDARS_KEY, JSON.stringify(initial));
-    return initial;
-  }
+export function loadSecretUrls(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  const raw = localStorage.getItem(SECRETS_KEY);
+  if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as AgendaCalendar[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_CALENDARS;
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
-    return DEFAULT_CALENDARS;
+    return {};
   }
 }
 
-export function saveCalendars(list: AgendaCalendar[]) {
-  localStorage.setItem(CALENDARS_KEY, JSON.stringify(list));
+export function saveSecretUrl(personId: string, url: string) {
+  const next = { ...loadSecretUrls(), [personId]: url };
+  localStorage.setItem(SECRETS_KEY, JSON.stringify(next));
+}
+
+export function loadCalendars(): AgendaCalendar[] {
+  const people = loadPeople();
+  const family = loadFamily();
+  const secrets = loadSecretUrls();
+  const members = family.membros
+    .map((member) => people.find((person) => person.id === member.personId))
+    .filter((person): person is Person => Boolean(person?.email));
+  return members.map((person, index) => ({
+    id: person.id,
+    name: memberLabel(person, members),
+    email: person.email,
+    color: MEMBER_COLORS[index % MEMBER_COLORS.length],
+    url: secrets[person.id] ?? "",
+  }));
 }
 
 export function loadImportedShifts(): Shift[] {

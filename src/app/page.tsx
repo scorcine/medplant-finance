@@ -16,7 +16,7 @@ import {
   type ViewScope,
 } from "@/lib/mock-data";
 import { loadExpenses, loadLocations } from "@/lib/records";
-import { loadImportedShifts, mergeShifts } from "@/lib/shifts-store";
+import { loadCalendars, loadImportedShifts, mergeShifts, type AgendaCalendar } from "@/lib/shifts-store";
 import { formatBRL } from "@/lib/utils";
 
 const MONTH = "2026-10";
@@ -26,11 +26,13 @@ export default function DashboardPage() {
   const [agenda, setAgenda] = useState<Shift[]>(shifts);
   const [placeList, setPlaceList] = useState<ShiftLocation[]>(locations);
   const [expenseList, setExpenseList] = useState<Expense[]>(expenses);
+  const [memberCalendars, setMemberCalendars] = useState<AgendaCalendar[]>([]);
 
   useEffect(() => {
     setAgenda(mergeShifts(loadImportedShifts()));
     setPlaceList(loadLocations());
     setExpenseList(loadExpenses());
+    setMemberCalendars(loadCalendars());
   }, []);
 
   const shiftIncome = agenda
@@ -68,20 +70,23 @@ export default function DashboardPage() {
         className="flex flex-col gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 hover:bg-[var(--color-surface-elevated)] sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <p className="font-semibold">Agendas do Chrome</p>
+          <p className="font-semibold">Calendário da família</p>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            A sua em roxo e a da sua esposa em laranja. Os plantões e os valores entram separados.
+            Veja o que é de cada pessoa ou todos juntos. A agenda é puxada pelo e-mail do cadastro.
           </p>
         </div>
-        <span className="flex items-center gap-3 text-sm font-medium">
-          <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#7c3aed]" aria-hidden />
-            Meu calendário
-          </span>
-          <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-[#f97316]" aria-hidden />
-            Esposa
-          </span>
+        <span className="flex flex-wrap items-center gap-3 text-sm font-medium">
+          {memberCalendars.length === 0 ? (
+            <span className="text-[var(--color-muted)]">Nenhuma família montada</span>
+          ) : (
+            memberCalendars.map((calendar) => (
+              <span key={calendar.id} className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: calendar.color }} aria-hidden />
+                {calendar.name}
+              </span>
+            ))
+          )}
+          <span className="text-[var(--color-muted)]">Juntos</span>
         </span>
       </Link>
 

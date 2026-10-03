@@ -84,7 +84,7 @@ export default function InclusaoFamiliaPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Inclusão da família</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            Escolha, entre as pessoas já cadastradas, quem faz parte da família.
+            Quem você marcar aqui forma a família. O calendário separa o que é de cada e-mail e também mostra todos juntos.
           </p>
         </div>
       </header>

@@ -28,12 +28,19 @@ export default function CadastroPessoasPage() {
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!form.nome.trim()) {
-      setError("Informe o nome da pessoa.");
+    if (!form.nome.trim() || !form.email.trim()) {
+      setError("Informe o nome e o e-mail. O e-mail identifica a agenda dessa pessoa.");
+      return;
+    }
+    if (people.some((person) => person.email.toLowerCase() === form.email.trim().toLowerCase())) {
+      setError("Esse e-mail já está cadastrado.");
       return;
     }
     setError("");
-    const next = [...people, { ...form, id: crypto.randomUUID(), nome: form.nome.trim() }];
+    const next = [
+      ...people,
+      { ...form, id: crypto.randomUUID(), nome: form.nome.trim(), email: form.email.trim().toLowerCase() },
+    ];
     setPeople(next);
     savePeople(next);
     setForm(blank());
@@ -72,12 +79,13 @@ export default function CadastroPessoasPage() {
               required
             />
           </Field>
-          <Field label="E-mail">
+          <Field label="E-mail" hint="Obrigatório. A agenda do Google dessa pessoa é puxada por este e-mail.">
             <TextInput
               type="email"
               value={form.email}
               onChange={(e) => update("email", e.target.value)}
-              placeholder="Opcional"
+              placeholder="angela@gmail.com"
+              required
             />
           </Field>
           <Field label="Telefone">
