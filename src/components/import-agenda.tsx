@@ -147,19 +147,21 @@ export function ImportAgenda({ onImported }: Props) {
                 <p className="font-semibold">Como pegar o endereço secreto de {calendar.name}</p>
                 <ol className="mt-2 list-decimal space-y-1 pl-5 text-[var(--color-muted)]">
                   <li>
-                    No computador, abra as{" "}
+                    No computador, entrando com {calendar.email}, abra as{" "}
                     <a
-                      href="https://calendar.google.com/calendar/r/settings"
+                      href={`https://calendar.google.com/calendar/r/settings/calendar/${btoa(calendar.email)}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[var(--color-accent)] hover:underline"
                     >
-                      configurações do Google Agenda
-                    </a>{" "}
-                    entrando com {calendar.email}.
+                      configurações da agenda de {calendar.name}
+                    </a>
+                    .
                   </li>
-                  <li>Na coluna da esquerda, em “Configurações das minhas agendas”, clique em {calendar.name}.</li>
-                  <li>Desça até “Integrar agenda” e copie o “Endereço secreto no formato iCal”.</li>
+                  <li>
+                    Role a página até o fim, na seção “Integrar agenda”, e copie o “Endereço secreto no formato iCal”
+                    (não o endereço público).
+                  </li>
                   <li>Cole no campo acima e clique em “Puxar agenda”.</li>
                 </ol>
                 <p className="mt-2 text-xs text-[var(--color-muted)]">
