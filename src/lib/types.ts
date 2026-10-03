@@ -50,6 +50,11 @@ export type Position = {
   classe: string;
   aplicado: number;
   atual: number;
+  ticker?: string;
+  quantidade?: number;
+  preco?: number;
+  variacaoDia?: number;
+  atualizadoEm?: string;
 };
 
 export function monthExpenses(monthPrefix: string, scope: ViewScope, list: Expense[]): number {
