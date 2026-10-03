@@ -1,6 +1,7 @@
-import type { CreditCard, Expense, Position, ShiftLocation } from "@/lib/types";
+import type { CreditCard, Expense, Income, Position, ShiftLocation } from "@/lib/types";
 
 const LOCATIONS_KEY = "medplant-locais";
+const INCOMES_KEY = "medplant-receitas";
 const EXPENSES_KEY = "medplant-gastos";
 const CARDS_KEY = "medplant-cartoes";
 const POSITIONS_KEY = "medplant-carteira";
@@ -34,6 +35,9 @@ export const saveExpenses = (list: Expense[]) => writeList(EXPENSES_KEY, list);
 
 export const loadCards = () => readList<CreditCard>(CARDS_KEY);
 export const saveCards = (list: CreditCard[]) => writeList(CARDS_KEY, list);
+
+export const loadIncomes = () => readList<Income>(INCOMES_KEY);
+export const saveIncomes = (list: Income[]) => writeList(INCOMES_KEY, list);
 
 export const loadPositions = () => readList<Position>(POSITIONS_KEY);
 export const savePositions = (list: Position[]) => writeList(POSITIONS_KEY, list);

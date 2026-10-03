@@ -10,6 +10,7 @@ import {
   MapPin,
   PieChart,
   Receipt,
+  Scale,
   UserRound,
   Users,
   Wallet,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/balanco", label: "Balanço", icon: Scale },
   { href: "/carteira", label: "Carteira", icon: PieChart },
   { href: "/cadastro/pessoas", label: "Meus dados e pessoas", icon: UserRound },
   { href: "/cadastro/familia", label: "Inclusão da família", icon: Users },

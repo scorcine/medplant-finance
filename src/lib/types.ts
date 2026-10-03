@@ -74,6 +74,26 @@ export function payerAmounts(amount: number, expense: Expense, memberIds: string
   return splitExact(amount, Object.entries(payerShares(expense, memberIds)));
 }
 
+export type Income = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  personId?: string;
+  fixo?: boolean;
+  fimMes?: string;
+};
+
+export function incomesInMonth(list: Income[], month: string) {
+  return list
+    .filter((income) => {
+      const start = income.date.slice(0, 7);
+      if (income.fixo) return start <= month && (!income.fimMes || month <= income.fimMes);
+      return start === month;
+    })
+    .sort((a, b) => a.description.localeCompare(b.description));
+}
+
 export type ExpenseKind = "fixo" | "cartao" | "variavel";
 
 export const KIND_LABEL: Record<ExpenseKind, string> = {
