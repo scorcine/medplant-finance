@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, CalendarCheck, PiggyBank, TrendingUp } from "lucide-react";
+import Link from "next/link";
+import { ArrowDownRight, ArrowUpRight, CalendarCheck, PiggyBank, TrendingUp, UserRound, Users } from "lucide-react";
 import { ScopeToggle } from "@/components/scope-toggle";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -43,6 +44,29 @@ export default function DashboardPage() {
         </div>
         <ScopeToggle value={scope} onChange={setScope} />
       </header>
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/cadastro/pessoas"
+          className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-surface-elevated)]"
+        >
+          <UserRound className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
+          <span>
+            <span className="block font-medium">Cadastro de pessoas</span>
+            <span className="block text-sm text-[var(--color-muted)]">Médico e familiares</span>
+          </span>
+        </Link>
+        <Link
+          href="/cadastro/familia"
+          className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 hover:bg-[var(--color-surface-elevated)]"
+        >
+          <Users className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
+          <span>
+            <span className="block font-medium">Inclusão da família</span>
+            <span className="block text-sm text-[var(--color-muted)]">Escolher quem entra no grupo</span>
+          </span>
+        </Link>
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

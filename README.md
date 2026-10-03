@@ -53,5 +53,7 @@ O workflow `.github/workflows/vercel-deploy.yml` publica via Actions se você co
 | `/locais`   | Hospitais/clínicas e valor padrão |
 | `/gastos`   | Extrato pessoal e familiar        |
 | `/cartoes`  | Faturas de cartão (mock)          |
+| `/cadastro/pessoas` | Cadastro de pessoas           |
+| `/cadastro/familia` | Inclusão da família           |
 
 Os dados atuais são **mock** em `src/lib/mock-data.ts`. Próxima etapa: API + banco de dados.

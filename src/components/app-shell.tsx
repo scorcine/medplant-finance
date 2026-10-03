@@ -9,12 +9,16 @@ import {
   MapPin,
   Receipt,
   Stethoscope,
+  UserRound,
+  Users,
   Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/cadastro/pessoas", label: "Cadastro de pessoas", icon: UserRound },
+  { href: "/cadastro/familia", label: "Inclusão da família", icon: Users },
   { href: "/plantoes", label: "Plantões", icon: CalendarDays },
   { href: "/locais", label: "Locais", icon: MapPin },
   { href: "/gastos", label: "Gastos", icon: Receipt },
