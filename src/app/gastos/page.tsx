@@ -99,6 +99,8 @@ export default function GastosPage() {
   const [editing, setEditing] = useState<{ id: string; month: string } | null>(null);
   const [applyFrom, setApplyFrom] = useState<"todos" | "mes">("todos");
   const [notice, setNotice] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterPayer, setFilterPayer] = useState("");
 
   useEffect(() => {
     function refresh() {
@@ -146,7 +148,23 @@ export default function GastosPage() {
   );
 
   const entries = month ? expensesInMonth(list, month) : [];
-  const visible = entries.filter((entry) => inScope(entry.expense, scope));
+  const scoped = entries.filter((entry) => inScope(entry.expense, scope));
+  const payerKey = (entry: ExpenseEntry) =>
+    entry.expense.paidBy && people.some((person) => person.id === entry.expense.paidBy) ? entry.expense.paidBy : "nenhum";
+  const matchCategory = (entry: ExpenseEntry) => !filterCategory || entry.expense.category === filterCategory;
+  const matchPayer = (entry: ExpenseEntry) => !filterPayer || payerKey(entry) === filterPayer;
+  const visible = scoped.filter((entry) => matchCategory(entry) && matchPayer(entry));
+  const filtering = Boolean(filterCategory || filterPayer);
+
+  function groupTotals(items: ExpenseEntry[], keyOf: (entry: ExpenseEntry) => string) {
+    const totals = new Map<string, number>();
+    for (const entry of items) totals.set(keyOf(entry), (totals.get(keyOf(entry)) ?? 0) + entry.amount);
+    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
+  }
+
+  const byCategory = groupTotals(scoped.filter(matchPayer), (entry) => entry.expense.category);
+  const byPayer = groupTotals(scoped.filter(matchCategory), payerKey);
+  const monthCategories = Array.from(new Set(scoped.map((entry) => entry.expense.category))).sort();
   const totalOf = (kind: ExpenseKind) =>
     visible.filter((entry) => entry.kind === kind).reduce((sum, entry) => sum + entry.amount, 0);
   const total = visible.reduce((sum, entry) => sum + entry.amount, 0);
@@ -452,6 +470,98 @@ export default function GastosPage() {
         </button>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:flex-row sm:items-end">
+        <Field label="Filtrar por categoria" className="sm:w-60">
+          <SelectInput value={filterCategory} onChange={(event) => setFilterCategory(event.target.value)}>
+            <option value="">Todas as categorias</option>
+            {monthCategories.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </SelectInput>
+        </Field>
+        <Field label="Filtrar por quem pagou" className="sm:w-60">
+          <SelectInput value={filterPayer} onChange={(event) => setFilterPayer(event.target.value)}>
+            <option value="">Todos</option>
+            {people.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.nome}
+              </option>
+            ))}
+            <option value="nenhum">Não informado</option>
+          </SelectInput>
+        </Field>
+        {filtering ? (
+          <button
+            type="button"
+            onClick={() => {
+              setFilterCategory("");
+              setFilterPayer("");
+            }}
+            className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm text-[var(--color-muted)]"
+          >
+            Limpar filtros
+          </button>
+        ) : null}
+      </div>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        {[
+          { title: "Por categoria", rows: byCategory, active: filterCategory, select: setFilterCategory, label: (key: string) => key },
+          {
+            title: "Por quem pagou",
+            rows: byPayer,
+            active: filterPayer,
+            select: setFilterPayer,
+            label: (key: string) => (key === "nenhum" ? "Não informado" : personName(key)),
+          },
+        ].map((group) => {
+          const groupTotal = group.rows.reduce((sum, [, value]) => sum + value, 0);
+          return (
+            <div key={group.title} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+              <h2 className="font-semibold">{group.title}</h2>
+              {group.rows.length === 0 ? (
+                <p className="mt-3 text-sm text-[var(--color-muted)]">Nada neste mês.</p>
+              ) : (
+                <ul className="mt-3 space-y-1">
+                  {group.rows.map(([key, value]) => {
+                    const share = groupTotal > 0 ? (value / groupTotal) * 100 : 0;
+                    const active = group.active === key;
+                    return (
+                      <li key={key}>
+                        <button
+                          type="button"
+                          onClick={() => group.select(active ? "" : key)}
+                          className={cn(
+                            "w-full rounded-lg px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface-elevated)]",
+                            active && "bg-[var(--color-accent-soft)]",
+                          )}
+                        >
+                          <span className="flex justify-between gap-3">
+                            <span>{group.label(key)}</span>
+                            <span className="font-medium">
+                              {formatBRL(value)}{" "}
+                              <span className="text-xs text-[var(--color-muted)]">{share.toFixed(0)}%</span>
+                            </span>
+                          </span>
+                          <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-[var(--color-background)]">
+                            <span
+                              className="block h-full rounded-full bg-[var(--color-accent)]"
+                              style={{ width: `${share}%` }}
+                            />
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </section>
+
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {KINDS.map((kind) => (
           <div key={kind} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
@@ -460,7 +570,7 @@ export default function GastosPage() {
           </div>
         ))}
         <div className="rounded-2xl border border-[var(--color-accent)]/40 bg-[var(--color-surface)] px-5 py-4">
-          <p className="text-sm text-[var(--color-muted)]">Total do mês</p>
+          <p className="text-sm text-[var(--color-muted)]">{filtering ? "Total com filtro" : "Total do mês"}</p>
           <p className="text-xl font-semibold">{formatBRL(total)}</p>
         </div>
       </section>
