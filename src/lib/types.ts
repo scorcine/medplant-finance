@@ -36,6 +36,7 @@ export type Expense = {
   cardId?: string;
   parcelas?: number;
   fimMes?: string;
+  importKey?: string;
 };
 
 export type ExpenseKind = "fixo" | "cartao" | "variavel";

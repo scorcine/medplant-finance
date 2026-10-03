@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CreditCard as CardIcon, Trash2 } from "lucide-react";
+import { CreditCard as CardIcon, Trash2, Upload } from "lucide-react";
 import { Field, TextInput } from "@/components/form-field";
+import { ImportFatura } from "@/components/import-fatura";
 import { currentMonthKey, loadCards, loadExpenses, parseMoney, saveCards } from "@/lib/records";
 import { expensesInMonth, type CreditCard, type ExpenseEntry } from "@/lib/types";
 import { formatBRL } from "@/lib/utils";
@@ -14,6 +15,8 @@ export default function CartoesPage() {
   const [form, setForm] = useState(blank);
   const [error, setError] = useState("");
   const [monthEntries, setMonthEntries] = useState<ExpenseEntry[]>([]);
+  const [importingId, setImportingId] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     setCards(loadCards());
@@ -93,6 +96,8 @@ export default function CartoesPage() {
         </div>
       </form>
 
+      {notice ? <p className="text-sm text-[var(--color-success)]">{notice}</p> : null}
+
       {cards.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-[var(--color-border)] p-6 text-sm text-[var(--color-muted)]">
           Nenhum cartão cadastrado ainda.
@@ -144,6 +149,29 @@ export default function CartoesPage() {
                     <dd className="font-medium">Dia {card.dueDay}</dd>
                   </div>
                 </dl>
+                {importingId === card.id ? (
+                  <ImportFatura
+                    card={card}
+                    onCancel={() => setImportingId("")}
+                    onDone={(message) => {
+                      setImportingId("");
+                      setNotice(message);
+                      setMonthEntries(expensesInMonth(loadExpenses(), currentMonthKey()));
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportingId(card.id);
+                      setNotice("");
+                    }}
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm hover:border-[var(--color-accent)]"
+                  >
+                    <Upload className="h-4 w-4" aria-hidden />
+                    Importar fatura
+                  </button>
+                )}
               </article>
             );
           })}
