@@ -63,6 +63,28 @@ export default function DashboardPage() {
         <ScopeToggle value={scope} onChange={setScope} />
       </header>
 
+      <Link
+        href="/plantoes"
+        className="flex flex-col gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 hover:bg-[var(--color-surface-elevated)] sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div>
+          <p className="font-semibold">Agendas do Chrome</p>
+          <p className="mt-1 text-sm text-[var(--color-muted)]">
+            A sua em roxo e a da sua esposa em laranja. Os plantões e os valores entram separados.
+          </p>
+        </div>
+        <span className="flex items-center gap-3 text-sm font-medium">
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-[#7c3aed]" aria-hidden />
+            Meu calendário
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-[#f97316]" aria-hidden />
+            Esposa
+          </span>
+        </span>
+      </Link>
+
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href="/carteira"
