@@ -10,14 +10,21 @@ export type Person = {
   papel: PersonRole;
 };
 
+export type FamilyPayment = {
+  id: string;
+  descricao: string;
+  valor: number;
+};
+
 export type FamilyMember = {
   personId: string;
   parentesco: string;
+  pagamentos?: FamilyPayment[];
 };
 
 export type FamilyGroup = {
   nomeFamilia: string;
-  divisao: "igual" | "proporcional" | "titular";
+  divisao: "igual" | "proporcional" | "titular" | "personalizado";
   membros: FamilyMember[];
 };
 
