@@ -29,6 +29,22 @@ import { cn, formatBRL } from "@/lib/utils";
 
 const KINDS: ExpenseKind[] = ["fixo", "cartao", "variavel"];
 
+const BASE_CATEGORIES = [
+  "Moradia",
+  "Educação",
+  "Saúde",
+  "Alimentação",
+  "Mercado",
+  "Transporte",
+  "Contas da casa",
+  "Funcionários",
+  "Esporte",
+  "Lazer",
+  "Assinaturas",
+  "Família",
+  "Outros",
+];
+
 const KIND_HINT: Record<ExpenseKind, string> = {
   fixo: "Entra todo mês sozinho, a partir da data de início, até você encerrar.",
   cartao: "Compra no cartão. Parcelado entra uma parcela em cada mês.",
@@ -80,6 +96,9 @@ export default function GastosPage() {
   const [month, setMonth] = useState("");
   const [form, setForm] = useState(blank);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState<{ id: string; month: string } | null>(null);
+  const [applyFrom, setApplyFrom] = useState<"todos" | "mes">("todos");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     function refresh() {
@@ -122,6 +141,10 @@ export default function GastosPage() {
     return cards.find((card) => card.id === id)?.name ?? "";
   }
 
+  const categories = Array.from(
+    new Set([...BASE_CATEGORIES, ...list.map((expense) => expense.category).filter((item) => item !== "Sem categoria")]),
+  );
+
   const entries = month ? expensesInMonth(list, month) : [];
   const visible = entries.filter((entry) => inScope(entry.expense, scope));
   const totalOf = (kind: ExpenseKind) =>
@@ -149,8 +172,10 @@ export default function GastosPage() {
       return;
     }
     const parcelas = form.tipo === "cartao" ? Math.max(1, Math.min(48, Math.round(Number(form.parcelas) || 1))) : undefined;
+    const original = editing ? list.find((expense) => expense.id === editing.id) : undefined;
     const expense: Expense = {
-      id: crypto.randomUUID(),
+      ...(original ?? {}),
+      id: original?.id ?? crypto.randomUUID(),
       date: form.date,
       description: form.description.trim(),
       amount,
@@ -161,11 +186,63 @@ export default function GastosPage() {
       tipo: form.tipo,
       cardId: form.tipo === "cartao" ? form.cardId || undefined : undefined,
       parcelas,
+      fimMes: form.tipo === "fixo" ? original?.fimMes : undefined,
     };
+    setError("");
+
+    if (original && editing) {
+      const start = original.date.slice(0, 7);
+      if (original.tipo === "fixo" && form.tipo === "fixo" && applyFrom === "mes" && editing.month > start) {
+        const continuation: Expense = {
+          ...expense,
+          id: crypto.randomUUID(),
+          date: `${editing.month}-${form.date.slice(8, 10)}`,
+        };
+        persist([
+          continuation,
+          ...list.map((item) => (item.id === original.id ? { ...item, fimMes: shiftMonth(editing.month, -1) } : item)),
+        ]);
+        setNotice(`"${expense.description}" alterado a partir de ${monthLabel(editing.month)}.`);
+      } else {
+        persist(list.map((item) => (item.id === original.id ? expense : item)));
+        setNotice(`"${expense.description}" alterado.`);
+        if (expense.tipo !== "fixo" && expense.date.slice(0, 7) !== month) setMonth(expense.date.slice(0, 7));
+      }
+      cancelEdit();
+      return;
+    }
+
     persist([expense, ...list]);
+    setNotice("");
     if (form.date.slice(0, 7) !== month) setMonth(form.date.slice(0, 7));
     setForm({ ...form, description: "", amount: "", parcelas: "1" });
+  }
+
+  function startEdit(entry: ExpenseEntry) {
+    const expense = entry.expense;
+    setEditing({ id: expense.id, month });
+    setApplyFrom("todos");
+    setNotice("");
     setError("");
+    setForm({
+      tipo: entry.kind,
+      date: expense.date,
+      description: expense.description,
+      amount: expense.amount.toFixed(2).replace(".", ","),
+      category: expense.category === "Sem categoria" ? "" : expense.category,
+      scope: expense.scope,
+      payment: expense.payment,
+      paidBy: expense.paidBy ?? "",
+      cardId: expense.cardId ?? "",
+      parcelas: String(expense.parcelas ?? 1),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setApplyFrom("todos");
+    setForm((current) => ({ ...blank, tipo: current.tipo, date: todayKey(), paidBy: current.paidBy, scope: current.scope }));
   }
 
   function remove(id: string) {
@@ -179,31 +256,6 @@ export default function GastosPage() {
       return;
     }
     persist(list.map((expense) => (expense.id === entry.expense.id ? { ...expense, fimMes: shiftMonth(month, -1) } : expense)));
-  }
-
-  function changeFixedValue(entry: ExpenseEntry) {
-    const typed = window.prompt(
-      `Novo valor mensal de "${entry.expense.description}" a partir de ${monthLabel(month)}:`,
-      entry.amount.toFixed(2).replace(".", ","),
-    );
-    if (typed === null) return;
-    const amount = parseMoney(typed);
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    const start = entry.expense.date.slice(0, 7);
-    if (month === start) {
-      persist(list.map((expense) => (expense.id === entry.expense.id ? { ...expense, amount } : expense)));
-      return;
-    }
-    const continuation: Expense = {
-      ...entry.expense,
-      id: crypto.randomUUID(),
-      amount,
-      date: `${month}-${entry.expense.date.slice(8, 10)}`,
-    };
-    persist([
-      continuation,
-      ...list.map((expense) => (expense.id === entry.expense.id ? { ...expense, fimMes: shiftMonth(month, -1) } : expense)),
-    ]);
   }
 
   return (
@@ -220,8 +272,12 @@ export default function GastosPage() {
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+        className={cn(
+          "space-y-4 rounded-2xl border bg-[var(--color-surface)] p-5",
+          editing ? "border-[var(--color-accent)]" : "border-[var(--color-border)]",
+        )}
       >
+        {editing ? <p className="text-sm font-semibold text-[var(--color-accent)]">Editando gasto</p> : null}
         <div>
           <div className="inline-flex flex-wrap gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-1">
             {KINDS.map((kind) => (
@@ -304,7 +360,16 @@ export default function GastosPage() {
             </Field>
           )}
           <Field label="Categoria">
-            <TextInput value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} />
+            <TextInput
+              list="categorias-gasto"
+              value={form.category}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
+            />
+            <datalist id="categorias-gasto">
+              {categories.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
           </Field>
           <Field label="Escopo">
             <SelectInput
@@ -331,11 +396,41 @@ export default function GastosPage() {
             {form.parcelas}x de {formatBRL(parseMoney(form.amount) / Number(form.parcelas))}
           </p>
         ) : null}
+        {editing &&
+        form.tipo === "fixo" &&
+        list.find((expense) => expense.id === editing.id)?.tipo === "fixo" &&
+        editing.month > (list.find((expense) => expense.id === editing.id)?.date.slice(0, 7) ?? "") ? (
+          <Field label="Aplicar a alteração" className="max-w-sm">
+            <SelectInput value={applyFrom} onChange={(event) => setApplyFrom(event.target.value as "todos" | "mes")}>
+              <option value="todos">Em todos os meses</option>
+              <option value="mes">A partir de {monthLabel(editing.month)} (mantém os meses anteriores)</option>
+            </SelectInput>
+          </Field>
+        ) : null}
         {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
-        <button type="submit" className="rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white">
-          {form.tipo === "fixo" ? "Lançar gasto fixo" : form.tipo === "cartao" ? "Lançar compra no cartão" : "Lançar gasto"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" className="rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white">
+            {editing
+              ? "Salvar alteração"
+              : form.tipo === "fixo"
+                ? "Lançar gasto fixo"
+                : form.tipo === "cartao"
+                  ? "Lançar compra no cartão"
+                  : "Lançar gasto"}
+          </button>
+          {editing ? (
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm"
+            >
+              Cancelar
+            </button>
+          ) : null}
+        </div>
       </form>
+
+      {notice ? <p className="text-sm text-[var(--color-success)]">{notice}</p> : null}
 
       <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3">
         <button
@@ -421,25 +516,23 @@ export default function GastosPage() {
                       <td className="px-5 py-3 text-right font-semibold">{formatBRL(entry.amount)}</td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(entry)}
+                            aria-label={`Editar ${entry.expense.description}`}
+                            title="Editar"
+                          >
+                            <Pencil className="h-4 w-4 text-[var(--color-muted)]" />
+                          </button>
                           {kind === "fixo" ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => changeFixedValue(entry)}
-                                aria-label={`Alterar valor de ${entry.expense.description}`}
-                                title="Alterar o valor a partir deste mês"
-                              >
-                                <Pencil className="h-4 w-4 text-[var(--color-muted)]" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => endFixed(entry)}
-                                aria-label={`Encerrar ${entry.expense.description}`}
-                                title="Encerrar a partir deste mês"
-                              >
-                                <Square className="h-4 w-4 text-[var(--color-warning)]" />
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              onClick={() => endFixed(entry)}
+                              aria-label={`Encerrar ${entry.expense.description}`}
+                              title="Encerrar a partir deste mês"
+                            >
+                              <Square className="h-4 w-4 text-[var(--color-warning)]" />
+                            </button>
                           ) : null}
                           <button
                             type="button"
