@@ -23,7 +23,7 @@ type QuoteResponse = {
 function toSymbol(ticker: string, classe: string) {
   const code = ticker.trim().toUpperCase();
   if (/[.\-=]/.test(code)) return code;
-  if (classe === "Cripto") return `${code}-BRL`;
+  if (classe === "Cripto") return `${code}-USD`;
   if (/^[A-Z]{4}\d{1,2}[A-Z]?$/.test(code)) return `${code}.SA`;
   return code;
 }
