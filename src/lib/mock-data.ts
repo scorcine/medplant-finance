@@ -14,6 +14,7 @@ export type Shift = {
   start: string;
   end: string;
   paid: boolean;
+  title?: string;
 };
 
 export type Expense = {
@@ -87,8 +88,8 @@ export function shiftAmount(shift: Shift): number {
   return getLocation(shift.locationId)?.defaultRate ?? 0;
 }
 
-export function monthShiftIncome(monthPrefix: string): number {
-  return shifts
+export function monthShiftIncome(monthPrefix: string, list: Shift[] = shifts): number {
+  return list
     .filter((s) => s.date.startsWith(monthPrefix))
     .reduce((sum, s) => sum + shiftAmount(s), 0);
 }

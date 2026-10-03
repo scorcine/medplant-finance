@@ -50,7 +50,7 @@ O workflow `.github/workflows/vercel-deploy.yml` publica via Actions se você co
 | ----------- | --------------------------------- |
 | `/`         | Dashboard e visão por escopo      |
 | `/carteira` | Análise da carteira de investimentos |
-| `/plantoes` | Calendário mensal de plantões     |
+| `/plantoes` | Calendário de plantões e importação da agenda do Google/Chrome |
 | `/locais`   | Hospitais/clínicas e valor padrão |
 | `/gastos`   | Extrato pessoal e familiar        |
 | `/cartoes`  | Faturas de cartão (mock)          |

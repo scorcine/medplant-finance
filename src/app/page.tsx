@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, CalendarCheck, PieChart, PiggyBank, TrendingUp, UserRound, Users } from "lucide-react";
 import { ScopeToggle } from "@/components/scope-toggle";
@@ -12,26 +12,33 @@ import {
   monthShiftIncome,
   shifts,
   shiftAmount,
+  type Shift,
   type ViewScope,
 } from "@/lib/mock-data";
+import { loadImportedShifts, mergeShifts } from "@/lib/shifts-store";
 import { formatBRL } from "@/lib/utils";
 
 const MONTH = "2026-10";
 
 export default function DashboardPage() {
   const [scope, setScope] = useState<ViewScope>("consolidado");
+  const [agenda, setAgenda] = useState<Shift[]>(shifts);
 
-  const shiftIncome = monthShiftIncome(MONTH);
+  useEffect(() => {
+    setAgenda(mergeShifts(loadImportedShifts()));
+  }, []);
+
+  const shiftIncome = monthShiftIncome(MONTH, agenda);
   const spent = monthExpenses(MONTH, scope);
   const balance = shiftIncome - spent;
 
   const byLocation = useMemo(() => {
     return locations.map((loc) => {
-      const locShifts = shifts.filter((s) => s.date.startsWith(MONTH) && s.locationId === loc.id);
+      const locShifts = agenda.filter((s) => s.date.startsWith(MONTH) && s.locationId === loc.id);
       const total = locShifts.reduce((sum, s) => sum + shiftAmount(s), 0);
       return { loc, count: locShifts.length, total };
     });
-  }, []);
+  }, [agenda]);
 
   const recentExpenses = expenses.slice(0, 4);
 
@@ -102,7 +109,7 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Plantões agendados"
-          value={shifts.filter((s) => s.date.startsWith(MONTH)).length}
+          value={agenda.filter((s) => s.date.startsWith(MONTH)).length}
           subtitle="3 a receber"
           icon={CalendarCheck}
           trend="neutral"
