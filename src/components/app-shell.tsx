@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  Cloud,
   CreditCard,
   LayoutDashboard,
   MapPin,
@@ -18,6 +19,7 @@ import {
 import { InstallApp } from "@/components/install-app";
 import { loadOwner, type Person } from "@/lib/people";
 import { DATA_EVENT } from "@/lib/records";
+import { startSync } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -30,11 +32,16 @@ const nav = [
   { href: "/locais", label: "Plantões e valores", icon: MapPin },
   { href: "/gastos", label: "Gastos", icon: Receipt },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
+  { href: "/sincronizar", label: "Sincronizar aparelhos", icon: Cloud },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [owner, setOwner] = useState<Person | null>(null);
+
+  useEffect(() => {
+    startSync();
+  }, []);
 
   useEffect(() => {
     const refresh = () => setOwner(loadOwner());
