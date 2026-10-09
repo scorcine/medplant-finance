@@ -155,13 +155,17 @@ export default function SincronizarPage() {
               e clique em <strong>Create Database</strong>.
             </li>
             <li>
-              Escolha <strong>Upstash → Redis</strong>, plano <strong>Free</strong>, região São Paulo (gru1) se houver.
+              Escolha <strong>Upstash for Redis</strong> (ou <strong>Redis</strong>), plano <strong>Free</strong>, região São Paulo
+              (gru1) se houver.
             </li>
             <li>
-              Em <strong>Connect Project</strong>, escolha o projeto <strong>finance</strong> e confirme.
+              Em <strong>Connect Project</strong>, escolha o projeto <strong>finance-henf</strong> (o deste site) e confirme.
+              Se já criou o banco ligado a outro projeto, abra o banco em Storage → <strong>Projects</strong> →{" "}
+              <strong>Connect Project</strong> e adicione o finance-henf.
             </li>
             <li>
-              Em Deployments, clique nos três pontinhos do último e em <strong>Redeploy</strong>.
+              No projeto <strong>finance-henf</strong>, em Deployments, clique nos três pontinhos do último e em{" "}
+              <strong>Redeploy</strong>.
             </li>
           </ol>
         </section>

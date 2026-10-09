@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createClient } from "redis";
 import { SYNCED_KEYS, applyOp, type SyncOp } from "@/lib/sync-merge";
 
 export const dynamic = "force-dynamic";
@@ -7,13 +8,29 @@ type SyncDoc = { version: number; updatedAt: string; keys: Record<string, string
 
 const ALLOWED = new Set<string>(SYNCED_KEYS);
 
-function redisConfig() {
-  const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-  return url && token ? { url, token } : null;
+type RedisConfig = { kind: "rest"; url: string; token: string } | { kind: "tcp"; url: string };
+
+function redisConfig(): RedisConfig | null {
+  const names = Object.keys(process.env);
+  for (const urlName of names.filter((name) => /(KV_REST_API_URL|UPSTASH_REDIS_REST_URL)$/.test(name))) {
+    const url = process.env[urlName];
+    const token = process.env[urlName.replace(/URL$/, "TOKEN")];
+    if (url && token) return { kind: "rest", url, token };
+  }
+  const tcpName = names.find((name) => /(^|_)(REDIS_URL|KV_URL)$/.test(name) && /^rediss?:\/\//.test(process.env[name] ?? ""));
+  return tcpName ? { kind: "tcp", url: process.env[tcpName] as string } : null;
 }
 
-async function redis(config: { url: string; token: string }, command: unknown[]) {
+async function redis(config: RedisConfig, command: string[]) {
+  if (config.kind === "tcp") {
+    const client = createClient({ url: config.url });
+    await client.connect();
+    try {
+      return await client.sendCommand(command);
+    } finally {
+      await client.quit();
+    }
+  }
   const response = await fetch(config.url, {
     method: "POST",
     headers: { Authorization: `Bearer ${config.token}`, "Content-Type": "application/json" },
@@ -54,7 +71,8 @@ function decrypt(code: string, payload: string): SyncDoc {
 }
 
 export function GET() {
-  return Response.json({ ready: Boolean(redisConfig()) });
+  const config = redisConfig();
+  return Response.json({ ready: Boolean(config), kind: config?.kind });
 }
 
 export async function POST(request: Request) {
