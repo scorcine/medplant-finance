@@ -211,6 +211,50 @@ export function exportFamilyFile() {
   return new File([text], `medplant-familia-${day}.json`, { type: "application/json" });
 }
 
+const LINK_PARAM = "dados=";
+
+function toBase64Url(bytes: Uint8Array) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(text: string) {
+  const binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+export async function buildFamilyLink(site: string) {
+  const keys: Record<string, string> = {};
+  for (const key of SYNCED_KEYS) {
+    if (key === "medplant-agenda-shifts") continue;
+    const value = localStorage.getItem(key);
+    if (value !== null) keys[key] = value;
+  }
+  const json = JSON.stringify({ app: FILE_APP, version: 1, keys });
+  const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  return `${site}/sincronizar#${LINK_PARAM}${toBase64Url(bytes)}`;
+}
+
+export function linkPayload(hash: string) {
+  const value = hash.replace(/^#/, "");
+  return value.startsWith(LINK_PARAM) ? value.slice(LINK_PARAM.length) : "";
+}
+
+export async function importFamilyLink(payload: string) {
+  let text: string;
+  try {
+    const stream = new Blob([fromBase64Url(payload)]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    text = await new Response(stream).text();
+  } catch {
+    throw new Error("O link está incompleto. Peça para enviarem de novo.");
+  }
+  importFamilyFile(text);
+}
+
 export function importFamilyFile(text: string) {
   let parsed: { app?: string; keys?: Record<string, unknown> };
   try {

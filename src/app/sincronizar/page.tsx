@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Cloud, Copy, FileDown, FileUp, LogOut, RefreshCw, Share2 } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { loadOwner, loadPeople, saveOwner, type Person } from "@/lib/people";
 import { DATA_EVENT } from "@/lib/records";
 import {
+  buildFamilyLink,
   createFamilySync,
   exportFamilyFile,
   formatCode,
   getSyncCode,
   importFamilyFile,
+  importFamilyLink,
   joinFamilySync,
+  linkPayload,
   leaveFamilySync,
   subscribeSync,
   syncNow,
@@ -32,8 +36,10 @@ export default function SincronizarPage() {
   const [notice, setNotice] = useState("");
   const [askOwner, setAskOwner] = useState(false);
   const [serverReady, setServerReady] = useState(true);
+  const [incoming, setIncoming] = useState("");
 
   useEffect(() => {
+    setIncoming(linkPayload(window.location.hash));
     fetch("/api/sync", { cache: "no-store" })
       .then((response) => response.json())
       .then((json: { ready?: boolean }) => setServerReady(Boolean(json.ready)))
@@ -119,6 +125,45 @@ export default function SincronizarPage() {
     setNotice("Código copiado.");
   }
 
+  async function sendLink() {
+    setError("");
+    try {
+      const url = await buildFamilyLink(SITE);
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "MedPlant da família", text: "Toque no link para receber os dados do MedPlant:", url });
+          setNotice("Link enviado. A Angela toca nele e depois em Receber os dados.");
+          return;
+        } catch (failure) {
+          if (failure instanceof DOMException && failure.name === "AbortError") return;
+        }
+      }
+      await navigator.clipboard.writeText(url);
+      setNotice("Link copiado. Cole no WhatsApp da Angela.");
+    } catch {
+      setError("Não foi possível gerar o link. Use Enviar arquivo.");
+    }
+  }
+
+  async function receiveLink() {
+    if (loadPeople().length > 0 && !window.confirm("Os dados deste aparelho serão trocados pelos dados recebidos. Continuar?")) return;
+    setError("");
+    setBusy(true);
+    try {
+      await importFamilyLink(incoming);
+      window.history.replaceState(null, "", "/sincronizar");
+      setIncoming("");
+      setPeople(loadPeople());
+      setOwnerId("");
+      setAskOwner(true);
+      setNotice("Pronto! Os dados chegaram. Escolha quem usa este aparelho e depois abra a Agenda.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Não foi possível receber os dados.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function sendFile() {
     setError("");
     const file = exportFamilyFile();
@@ -151,7 +196,7 @@ export default function SincronizarPage() {
       setPeople(loadPeople());
       setOwnerId("");
       setAskOwner(true);
-      setNotice("Pronto! Os dados chegaram. Escolha abaixo quem usa este aparelho.");
+      setNotice("Pronto! Os dados chegaram. Escolha quem usa este aparelho e depois abra a Agenda.");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Não foi possível abrir o arquivo.");
     }
@@ -182,7 +227,50 @@ export default function SincronizarPage() {
         </div>
       </header>
 
-      {!serverReady || status?.state === "sem-banco" ? (
+      {incoming ? (
+        <section className="rounded-2xl border-2 border-[var(--color-accent)] bg-[var(--color-surface)] p-5">
+          <h2 className="text-lg font-semibold">Receber os dados da família</h2>
+          <p className="mt-1 text-sm text-[var(--color-muted)]">
+            Este link traz as pessoas, os gastos, os plantões e a conexão das agendas. Toque no botão para trazer tudo para este
+            aparelho.
+          </p>
+          <button
+            type="button"
+            onClick={() => void receiveLink()}
+            disabled={busy}
+            className="mt-4 rounded-xl bg-[var(--color-accent)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          >
+            Receber os dados
+          </button>
+        </section>
+      ) : null}
+
+      {askOwner && !code ? (
+        <section className="rounded-2xl border-2 border-[var(--color-accent)] bg-[var(--color-surface)] p-5">
+          <h2 className="font-semibold">Quem usa este aparelho?</h2>
+          <div className="mt-3 max-w-xs">
+            <SelectInput value="" onChange={(event) => chooseOwner(event.target.value)}>
+              <option value="">Escolha…</option>
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.nome}
+                </option>
+              ))}
+            </SelectInput>
+          </div>
+        </section>
+      ) : null}
+
+      {ownerId && !askOwner && notice.startsWith("Este aparelho agora") ? (
+        <Link
+          href="/agenda"
+          className="inline-flex rounded-xl bg-[var(--color-accent)] px-5 py-3 text-sm font-semibold text-white"
+        >
+          Abrir a Agenda
+        </Link>
+      ) : null}
+
+      {!incoming && (!serverReady || status?.state === "sem-banco") ? (
         <section className="rounded-2xl border border-[var(--color-warning)]/50 bg-[var(--color-surface)] p-5 text-sm">
           <h2 className="font-semibold">Falta ativar o banco de dados na Vercel</h2>
           <p className="mt-1 text-[var(--color-muted)]">Só o dono da conta da Vercel consegue fazer isso, uma única vez:</p>
@@ -350,18 +438,26 @@ export default function SincronizarPage() {
       )}
 
       <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-        <h2 className="font-semibold">Passar os dados por arquivo</h2>
+        <h2 className="font-semibold">Passar os dados para outro aparelho</h2>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
-          Funciona sem banco de dados. No aparelho com os cadastros, toque em <strong>Enviar arquivo</strong> e mande pelo
-          WhatsApp. No outro aparelho, salve o arquivo e toque em <strong>Abrir arquivo</strong>. Vão pessoas, família, gastos,
+          Funciona sem banco de dados. No aparelho com os cadastros, toque em <strong>Enviar link</strong> e mande pelo
+          WhatsApp. No outro aparelho, é só tocar no link e em <strong>Receber os dados</strong>. Vão pessoas, família, gastos,
           ganhos, cartões, carteira, plantões e a conexão das agendas. É uma cópia do momento: o que for lançado depois não passa
           sozinho.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => void sendFile()}
+            onClick={() => void sendLink()}
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            <Share2 className="h-4 w-4" aria-hidden />
+            Enviar link
+          </button>
+          <button
+            type="button"
+            onClick={() => void sendFile()}
+            className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium"
           >
             <FileDown className="h-4 w-4" aria-hidden />
             Enviar arquivo
@@ -373,22 +469,8 @@ export default function SincronizarPage() {
           </label>
         </div>
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          O arquivo leva o endereço secreto das agendas. Mande só para quem é da família e apague depois de abrir.
+          O link e o arquivo levam o endereço secreto das agendas. Mande só para quem é da família e apague a mensagem depois.
         </p>
-        {askOwner && !code ? (
-          <div className="mt-4 max-w-xs">
-            <Field label="Quem usa este aparelho?">
-              <SelectInput value="" onChange={(event) => chooseOwner(event.target.value)}>
-                <option value="">Escolha…</option>
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.nome}
-                  </option>
-                ))}
-              </SelectInput>
-            </Field>
-          </div>
-        ) : null}
       </section>
     </div>
   );
