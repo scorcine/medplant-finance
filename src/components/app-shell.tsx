@@ -15,6 +15,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
+import { InstallApp } from "@/components/install-app";
 import { loadOwner, type Person } from "@/lib/people";
 import { DATA_EVENT } from "@/lib/records";
 import { cn } from "@/lib/utils";
@@ -78,7 +79,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-[var(--color-border)] p-4">
+        <div className="space-y-3 border-t border-[var(--color-border)] p-4">
+          <InstallApp />
           <Link
             href="/cadastro/pessoas"
             className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-elevated)] px-3 py-3 hover:opacity-90"
@@ -98,9 +100,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PieChart className="h-5 w-5 text-[var(--color-accent)]" aria-hidden />
             <span className="font-semibold">MedPlant</span>
           </div>
-          <Link href="/cadastro/pessoas" className="max-w-[50%] truncate text-xs text-[var(--color-muted)]">
-            {owner ? owner.nome : "Fazer meu cadastro"}
-          </Link>
+          <div className="flex min-w-0 items-center gap-3">
+            <InstallApp compact />
+            <Link href="/cadastro/pessoas" className="max-w-[40vw] truncate text-xs text-[var(--color-muted)]">
+              {owner ? owner.nome : "Fazer meu cadastro"}
+            </Link>
+          </div>
         </header>
         <nav className="flex gap-1 overflow-x-auto border-b border-[var(--color-border)] px-2 py-2 lg:hidden">
           {nav.map(({ href, label, icon: Icon }) => {
