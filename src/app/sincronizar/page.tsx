@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cloud, Copy, LogOut, RefreshCw, Share2 } from "lucide-react";
+import { Cloud, Copy, FileDown, FileUp, LogOut, RefreshCw, Share2 } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { loadOwner, loadPeople, saveOwner, type Person } from "@/lib/people";
 import { DATA_EVENT } from "@/lib/records";
 import {
   createFamilySync,
+  exportFamilyFile,
   formatCode,
   getSyncCode,
+  importFamilyFile,
   joinFamilySync,
   leaveFamilySync,
   subscribeSync,
@@ -115,6 +117,44 @@ export default function SincronizarPage() {
   async function copyCode() {
     await navigator.clipboard.writeText(formatCode(code));
     setNotice("Código copiado.");
+  }
+
+  async function sendFile() {
+    setError("");
+    const file = exportFamilyFile();
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Dados do MedPlant" });
+        setNotice("Arquivo enviado. A Angela abre ele em Sincronizar → Abrir arquivo.");
+        return;
+      }
+    } catch (failure) {
+      if (failure instanceof DOMException && failure.name === "AbortError") return;
+    }
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = file.name;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setNotice("Arquivo salvo. Mande ele pelo WhatsApp para a Angela.");
+  }
+
+  async function openFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (loadPeople().length > 0 && !window.confirm("Os dados deste aparelho serão trocados pelos dados do arquivo. Continuar?")) return;
+    setError("");
+    try {
+      importFamilyFile(await file.text());
+      setPeople(loadPeople());
+      setOwnerId("");
+      setAskOwner(true);
+      setNotice("Pronto! Os dados chegaram. Escolha abaixo quem usa este aparelho.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Não foi possível abrir o arquivo.");
+    }
   }
 
   function leave() {
@@ -308,6 +348,48 @@ export default function SincronizarPage() {
           </section>
         </div>
       )}
+
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <h2 className="font-semibold">Passar os dados por arquivo</h2>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
+          Funciona sem banco de dados. No aparelho com os cadastros, toque em <strong>Enviar arquivo</strong> e mande pelo
+          WhatsApp. No outro aparelho, salve o arquivo e toque em <strong>Abrir arquivo</strong>. Vão pessoas, família, gastos,
+          ganhos, cartões, carteira, plantões e a conexão das agendas. É uma cópia do momento: o que for lançado depois não passa
+          sozinho.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void sendFile()}
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            <FileDown className="h-4 w-4" aria-hidden />
+            Enviar arquivo
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium">
+            <FileUp className="h-4 w-4" aria-hidden />
+            Abrir arquivo
+            <input type="file" accept=".json,application/json" onChange={(event) => void openFile(event)} className="sr-only" />
+          </label>
+        </div>
+        <p className="mt-3 text-xs text-[var(--color-muted)]">
+          O arquivo leva o endereço secreto das agendas. Mande só para quem é da família e apague depois de abrir.
+        </p>
+        {askOwner && !code ? (
+          <div className="mt-4 max-w-xs">
+            <Field label="Quem usa este aparelho?">
+              <SelectInput value="" onChange={(event) => chooseOwner(event.target.value)}>
+                <option value="">Escolha…</option>
+                {people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.nome}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

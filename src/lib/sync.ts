@@ -198,6 +198,37 @@ export async function joinFamilySync(raw: string) {
   window.dispatchEvent(new Event(DATA_EVENT));
 }
 
+const FILE_APP = "medplant-familia";
+
+export function exportFamilyFile() {
+  const keys: Record<string, string> = {};
+  for (const key of SYNCED_KEYS) {
+    const value = localStorage.getItem(key);
+    if (value !== null) keys[key] = value;
+  }
+  const text = JSON.stringify({ app: FILE_APP, version: 1, exportedAt: new Date().toISOString(), keys });
+  const day = new Date().toISOString().slice(0, 10);
+  return new File([text], `medplant-familia-${day}.json`, { type: "application/json" });
+}
+
+export function importFamilyFile(text: string) {
+  let parsed: { app?: string; keys?: Record<string, unknown> };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Esse arquivo não é um arquivo do MedPlant.");
+  }
+  if (parsed.app !== FILE_APP || !parsed.keys || typeof parsed.keys !== "object") {
+    throw new Error("Esse arquivo não é um arquivo do MedPlant.");
+  }
+  const keys = parsed.keys;
+  for (const key of SYNCED_KEYS) {
+    const value = keys[key];
+    writeLocal(key, typeof value === "string" ? value : null);
+  }
+  window.dispatchEvent(new Event(DATA_EVENT));
+}
+
 export function leaveFamilySync() {
   localStorage.removeItem(CODE_KEY);
   localStorage.removeItem(BASE_KEY);
