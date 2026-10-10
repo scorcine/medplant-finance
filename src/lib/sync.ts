@@ -6,15 +6,66 @@ const BASE_KEY = "medplant-sync-base";
 const LAST_KEY = "medplant-sync-ultima";
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+const DEVICE_KEY = "medplant-aparelho";
+const OWNER_KEY = "medplant-conta";
+const PEOPLE_KEY = "medplant-pessoas";
+
+export type SyncDevice = { id: string; label: string; lastSeen: string };
+
 export type SyncStatus = {
   state: "desligado" | "sincronizando" | "ok" | "erro" | "sem-banco";
   message: string;
   lastSync: string;
+  devices: SyncDevice[];
 };
 
-type ServerDoc = { version: number; updatedAt: string; keys: Record<string, string> };
+type ServerDoc = {
+  version: number;
+  updatedAt: string;
+  keys: Record<string, string>;
+  devices?: Record<string, { label: string; lastSeen: string }>;
+};
 
-let status: SyncStatus = { state: "desligado", message: "", lastSync: "" };
+let status: SyncStatus = { state: "desligado", message: "", lastSync: "", devices: [] };
+
+export function deviceId() {
+  let id = localStorage.getItem(DEVICE_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(DEVICE_KEY, id);
+  }
+  return id;
+}
+
+function deviceKind() {
+  const agent = navigator.userAgent;
+  if (/iPhone/i.test(agent)) return "iPhone";
+  if (/iPad/i.test(agent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) return "iPad";
+  if (/Android/i.test(agent)) return /Mobile/i.test(agent) ? "Celular Android" : "Tablet Android";
+  const browser = /Edg\//.test(agent) ? "Edge" : /Chrome\//.test(agent) ? "Chrome" : /Firefox\//.test(agent) ? "Firefox" : /Safari\//.test(agent) ? "Safari" : "";
+  const system = /Windows/i.test(agent) ? "Windows" : /Mac OS/i.test(agent) ? "Mac" : "";
+  return ["Computador", system, browser].filter(Boolean).join(" · ");
+}
+
+function ownerName() {
+  try {
+    const ownerId = localStorage.getItem(OWNER_KEY);
+    const people = JSON.parse(localStorage.getItem(PEOPLE_KEY) ?? "[]") as { id: string; nome: string }[];
+    return people.find((person) => person.id === ownerId)?.nome.split(" ")[0] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function deviceLabel() {
+  return [ownerName(), deviceKind()].filter(Boolean).join(" · ");
+}
+
+function devicesOf(doc: ServerDoc): SyncDevice[] {
+  return Object.entries(doc.devices ?? {})
+    .map(([id, value]) => ({ id, ...value }))
+    .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+}
 const listeners = new Set<(value: SyncStatus) => void>();
 let running: Promise<void> | null = null;
 let again = false;
@@ -68,7 +119,7 @@ async function request(code: string, body: { changes?: Record<string, SyncOp>; c
   const response = await fetch("/api/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-sync-code": code },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, device: { id: deviceId(), label: deviceLabel() } }),
     cache: "no-store",
   });
   const json = (await response.json().catch(() => ({}))) as Partial<ServerDoc> & { error?: string; code?: string };
@@ -116,7 +167,7 @@ async function runSync(create = false) {
     saveBase(base);
     const now = new Date().toISOString();
     localStorage.setItem(LAST_KEY, now);
-    setStatus({ state: "ok", message: "", lastSync: now });
+    setStatus({ state: "ok", message: "", lastSync: now, devices: devicesOf(doc) });
     if (applied) window.dispatchEvent(new Event(DATA_EVENT));
   } catch (error) {
     const code = (error as { code?: string }).code;
@@ -195,6 +246,7 @@ export async function joinFamilySync(raw: string) {
   localStorage.setItem(CODE_KEY, code);
   saveBase(base);
   localStorage.setItem(LAST_KEY, new Date().toISOString());
+  setStatus({ devices: devicesOf(doc) });
   window.dispatchEvent(new Event(DATA_EVENT));
 }
 
@@ -277,5 +329,5 @@ export function leaveFamilySync() {
   localStorage.removeItem(CODE_KEY);
   localStorage.removeItem(BASE_KEY);
   localStorage.removeItem(LAST_KEY);
-  setStatus({ state: "desligado", message: "", lastSync: "" });
+  setStatus({ state: "desligado", message: "", lastSync: "", devices: [] });
 }

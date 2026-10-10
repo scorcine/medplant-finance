@@ -4,7 +4,14 @@ import { SYNCED_KEYS, applyOp, type SyncOp } from "@/lib/sync-merge";
 
 export const dynamic = "force-dynamic";
 
-type SyncDoc = { version: number; updatedAt: string; keys: Record<string, string> };
+type SyncDoc = {
+  version: number;
+  updatedAt: string;
+  keys: Record<string, string>;
+  devices?: Record<string, { label: string; lastSeen: string }>;
+};
+
+const DEVICE_REFRESH_MS = 5 * 60_000;
 
 const ALLOWED = new Set<string>(SYNCED_KEYS);
 
@@ -87,7 +94,7 @@ export async function POST(request: Request) {
   const code = normalizeCode(request.headers.get("x-sync-code"));
   if (!code) return Response.json({ error: "Código da família inválido." }, { status: 400 });
 
-  let body: { changes?: Record<string, SyncOp>; create?: boolean };
+  let body: { changes?: Record<string, SyncOp>; create?: boolean; device?: { id?: unknown; label?: unknown } };
   try {
     body = await request.json();
   } catch {
@@ -113,11 +120,26 @@ export async function POST(request: Request) {
       changed = true;
     }
 
-    if (changed) {
-      doc = { ...doc, version: doc.version + 1, updatedAt: new Date().toISOString() };
+    if (changed) doc = { ...doc, version: doc.version + 1, updatedAt: new Date().toISOString() };
+
+    const devices = { ...(doc.devices ?? {}) };
+    let seen = false;
+    const deviceId = typeof body.device?.id === "string" ? body.device.id.slice(0, 64) : "";
+    if (deviceId) {
+      const label = typeof body.device?.label === "string" ? body.device.label.slice(0, 80) : "Aparelho";
+      const previous = devices[deviceId];
+      const now = new Date();
+      if (!previous || previous.label !== label || now.getTime() - Date.parse(previous.lastSeen) > DEVICE_REFRESH_MS) {
+        devices[deviceId] = { label, lastSeen: now.toISOString() };
+        seen = true;
+      }
+    }
+
+    if (changed || seen) {
+      doc = { ...doc, devices };
       await redis(config, ["SET", key, encrypt(code, doc)]);
     }
-    return Response.json({ version: doc.version, updatedAt: doc.updatedAt, keys: doc.keys });
+    return Response.json({ version: doc.version, updatedAt: doc.updatedAt, keys: doc.keys, devices });
   } catch {
     return Response.json({ error: "Não foi possível falar com o banco de dados." }, { status: 502 });
   }

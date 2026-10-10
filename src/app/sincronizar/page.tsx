@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Cloud, Copy, FileDown, FileUp, LogOut, RefreshCw, Share2 } from "lucide-react";
+import { Cloud, Copy, FileDown, FileUp, LogOut, Monitor, RefreshCw, Share2, Smartphone } from "lucide-react";
 import { Field, SelectInput, TextInput } from "@/components/form-field";
 import { loadOwner, loadPeople, saveOwner, type Person } from "@/lib/people";
 import { DATA_EVENT } from "@/lib/records";
 import {
   buildFamilyLink,
   createFamilySync,
+  deviceId,
   exportFamilyFile,
   formatCode,
   getSyncCode,
@@ -37,9 +38,11 @@ export default function SincronizarPage() {
   const [askOwner, setAskOwner] = useState(false);
   const [serverReady, setServerReady] = useState(true);
   const [incoming, setIncoming] = useState("");
+  const [thisDevice, setThisDevice] = useState("");
 
   useEffect(() => {
     setIncoming(linkPayload(window.location.hash));
+    setThisDevice(deviceId());
     fetch("/api/sync", { cache: "no-store" })
       .then((response) => response.json())
       .then((json: { ready?: boolean }) => setServerReady(Boolean(json.ready)))
@@ -331,6 +334,37 @@ export default function SincronizarPage() {
                 Sincronizar agora
               </button>
             </div>
+
+            <div className="mt-5 border-t border-[var(--color-border)] pt-4">
+              <h3 className="text-sm font-semibold">Aparelhos conectados</h3>
+              <ul className="mt-2 space-y-2">
+                {(status?.devices ?? []).map((device) => (
+                  <li key={device.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {/celular|iphone|ipad|tablet/i.test(device.label) ? (
+                        <Smartphone className="h-4 w-4 shrink-0 text-[var(--color-muted)]" aria-hidden />
+                      ) : (
+                        <Monitor className="h-4 w-4 shrink-0 text-[var(--color-muted)]" aria-hidden />
+                      )}
+                      <span className="truncate">{device.label || "Aparelho"}</span>
+                      {device.id === thisDevice ? (
+                        <span className="shrink-0 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-xs text-[var(--color-accent)]">
+                          este
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="shrink-0 text-xs text-[var(--color-muted)]">
+                      {new Date(device.lastSeen).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {(status?.devices ?? []).length <= 1 ? (
+                <p className="mt-2 text-xs text-[var(--color-muted)]">
+                  Só este aparelho por enquanto. O da Angela aparece aqui assim que ela abrir o link e tocar em Entrar na família.
+                </p>
+              ) : null}
+            </div>
           </section>
 
           <section
@@ -437,6 +471,7 @@ export default function SincronizarPage() {
         </div>
       )}
 
+      {code ? null : (
       <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
         <h2 className="font-semibold">Passar os dados para outro aparelho</h2>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
@@ -472,6 +507,7 @@ export default function SincronizarPage() {
           O link e o arquivo levam o endereço secreto das agendas. Mande só para quem é da família e apague a mensagem depois.
         </p>
       </section>
+      )}
     </div>
   );
 }
